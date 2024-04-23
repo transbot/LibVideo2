@@ -31,8 +31,9 @@
 
             <DataGrid.ContextMenu>
                 <ContextMenu>
-                    <MenuItem Header="复制" Command="Copy" />
-                    <MenuItem Header="打开" Click="OpenItem" />
+                    <!--<MenuItem Header="复制" Command="Copy" />-->
+                    <MenuItem Header="播放" Click="PlayOrOpenItem" />
+                    <MenuItem Header="打开文件夹" Click="OpenContainingFolder" />
                 </ContextMenu>
             </DataGrid.ContextMenu>
         </DataGrid>

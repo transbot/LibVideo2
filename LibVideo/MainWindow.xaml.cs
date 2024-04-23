@@ -1,4 +1,12 @@
-﻿using System;
+﻿/* todo: 
+ * 1. 允许删除目录
+ * 2. 显示splash screen
+ * 3. 优化UI，添加前后图标，显示之前和之后搜索的结果
+ * 4. 列出最近和频繁搜索的关键字
+ * 5. 定时更新显示
+ */
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -14,205 +22,225 @@ using System.Windows.Navigation;
 using System.Windows.Shapes;
 using System.IO;
 using System.Diagnostics;
-using System.Collections;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using Microsoft.Win32;
 using Microsoft.WindowsAPICodePack.Dialogs;
-
-
-
+using System.Windows.Threading;
+using Path = System.IO.Path;
 
 namespace LibVideo
 {
-
     /// <summary>
     /// MainWindow.xaml 的交互逻辑
     /// </summary>
-    /// 
-
-
-    /* todo: 
-     * 1. (已完成)排除例外项：不显示mkv,avi之外的文件名
-     * 2. (已完成)输出网格每行可选，并可播放视频或打开文件夹
-     * 3. (已完成)手动添加其他目录并更新结果列表
-     * 4. 异步输出，并显示视觉线索      
-     * 5. (已完成)搜索和定位功能
-     * 6. 挖掘子目录
-     * 7. (非迫切)中英分离
-     * 8. 显示结果按创建时间排序
-    */
-
-    // 字符串扩展方法
-    public static class StringExtensions
-    {
-        public static bool Contains(this string source, string toCheck, StringComparison comp)
-        {
-            return source?.IndexOf(toCheck, comp) >= 0;
-        }
-    }
-
-    // 基于指定目录构建目录数组
-    class DirectoryList
-    {
-
-        private List<string> directory = new List<string>{@"\\ds1817\Movies\", @"\\ds1517\Movies\",  @"\\ds1817\TVs\", @"\\ds1817\Documentary\" };
-        
-        
-
-        public void AddDirectory(string s) {
-            directory.Add(s);
-            
-        }
-        public DirectoryList()
-        {
-            
-        }
-        //属性，获取或更新目录列表
-        public List<string> DIRs
-        {
-            get { return this.directory; }
-        }
-            
-          
-
-       
-    }
-    // 基于提供目录数组构建目录内容列表
-    class ResultList
-    {
-        private List<AVItems> FileOrDirectoryList = new List<AVItems>();
-        public List<AVItems> RESULTLIST {get{return this.FileOrDirectoryList;} }
-
-
-
-        public ResultList() { }
-
-        public ResultList( List<string> dirList)
-        {
-            int n = 1;
-            foreach (string s in dirList)
-            {
-                DirectoryInfo directoryInfo = new DirectoryInfo(s);
-
-
-                // 以下列出文件:
-                foreach (FileInfo fi in directoryInfo.GetFiles())
-                {
-                    if (fi.Extension.Contains("avi", StringComparison.OrdinalIgnoreCase) ||
-                        fi.Extension.Contains("mov", StringComparison.OrdinalIgnoreCase) ||
-                        fi.Extension.Contains("mkv", StringComparison.OrdinalIgnoreCase) ||
-                        fi.Extension.Contains("wmv", StringComparison.OrdinalIgnoreCase) ||
-                        fi.Extension.Contains("flac", StringComparison.OrdinalIgnoreCase) ||
-                        fi.Extension.Contains("iso", StringComparison.OrdinalIgnoreCase) ||
-                        fi.Extension.Contains("mp3", StringComparison.OrdinalIgnoreCase))
-                    {
-                        FileOrDirectoryList.Add(new AVItems() { 
-                            Id = n, FileName = fi.Name, FolderName = fi.DirectoryName, FullName = fi.FullName });
-                        n++;
-                    }
-                }
-
-                // 以下列出目录中的子目录:
-                foreach (DirectoryInfo di in directoryInfo.GetDirectories())
-                {
-                    FileOrDirectoryList.Add(new AVItems() { Id = n, FileName = null, FolderName = di.FullName, FullName=di.FullName}); ;
-                    n++;
-                }
-            
-            }
-        }
-    }
-
-    class AVItems
-    {
-
-        public int Id { get; set; }
-        public string FileName { get; set; }
-        public string FolderName { get; set; }
-        public string FullName { get; set; }
-
-    }
-
-
     public partial class MainWindow : Window
     {
         private DirectoryList dirList = new DirectoryList();
-        
-        
-        private ResultList resultList = new ResultList();
-
+        private ObservableCollection<AVItems> resultList = new ObservableCollection<AVItems>();
         private string potplayerPath = GetPotPlayerPath();
+
         public MainWindow()
         {
             InitializeComponent();
+            this.Loaded += MainWindow_Loaded;
+            outputGrid.ItemsSource = resultList;  // 只设置一次
+                                                  // 设置定时器
+            DispatcherTimer timer = new DispatcherTimer();
+            timer.Interval = TimeSpan.FromSeconds(60); // 每60秒检查一次
+            timer.Tick += Timer_Tick;
+            timer.Start();
+        }
+
+        private async void Timer_Tick(object sender, EventArgs e)
+        {
+            await CheckAndUpdateFilesAsync();
+        }
+
+        private async Task CheckAndUpdateFilesAsync()
+        {
+            // 假设 directoryList 和 previousItemList 是之前加载项的记录
+            var currentItems = new List<AVItems>();
+            foreach (var dir in dirList.DIRs)
+            {
+                currentItems.AddRange(await GetFilesAsync(dir));
+            }
+
+            // 比较当前项和之前项
+            if (!AreListsEqual(currentItems, resultList))
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    resultList.Clear();
+                    foreach (var item in currentItems)
+                    {
+                        resultList.Add(item);
+                    }
+                });
+            }
+        }
+
+        
+
+
+
+
+
+        private bool AreListsEqual(List<AVItems> currentItems, ObservableCollection<AVItems> previousItems)
+        {
+            if (currentItems.Count != previousItems.Count)
+                return false;
+
+            var set = new HashSet<AVItems>(currentItems, new AVItemComparer());
+            return previousItems.All(set.Contains);
+        }
+
+        class AVItemComparer : IEqualityComparer<AVItems>
+        {
+            public bool Equals(AVItems x, AVItems y)
+            {
+                return x.FileName == y.FileName && x.FolderName == y.FolderName && x.FullName == y.FullName;
+            }
+
+            public int GetHashCode(AVItems obj)
+            {
+                return obj.FullName.GetHashCode();
+            }
+        }
+
+
+        private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
+        {
             ImageBrush myBrush = new ImageBrush();
-            myBrush.ImageSource =
-                new BitmapImage(new Uri("background.jpg", UriKind.Relative));
+            myBrush.ImageSource = new BitmapImage(new Uri("background.jpg", UriKind.Relative));
             this.Background = myBrush;
 
-            // 创建默认目录列表
-            // DirectoryList dirList = new DirectoryList();
-
-            // 用默认目录列表创建默认结果列表
-            resultList = new ResultList(dirList.DIRs);
-
-            // 显示默认目录列表
             DisplayDirList(dirList);
-
-            
-            
-            // 更新结果列表
-            outputGrid.ItemsSource = resultList.RESULTLIST;          
-            
+            await LoadFilesAsync();
+            outputGrid.ItemsSource = resultList;
         }
 
-        // todo: 获取目录中的一个item(文件或子目录)，返回影音文件的路径，或返回子目录中的影音文件的路径
-        private static string GetAVItemPath()
+        private void dirTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
-            return null;
-        }
-
-        private static string GetPotPlayerPath()
-
-        {
-
-            var regKey = @"Applications\PotPlayerMini64.exe\shell\open\command";
-
-            RegistryKey registryKey = Registry.ClassesRoot.OpenSubKey(regKey);
-
-
-            string pathName = (string)registryKey.GetValue(null);  // "(Default)"  
-
-
-            if (string.IsNullOrEmpty(pathName))
-
+            // 获取当前文本框中的文本
+            var textBox = sender as TextBox;
+            if (textBox != null)
             {
+                // 假设dirTxt是一个显示目录地址的TextBlock或类似控件
+                dirTxt.Text = textBox.Text;
+            }
+        }
 
-                return null;
+        private void keywords_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            TextBox textBox = sender as TextBox;
+            string filter = textBox.Text.ToLower();
+            ICollectionView collectionView = CollectionViewSource.GetDefaultView(outputGrid.ItemsSource);
+            collectionView.Filter = (item) =>
+            {
+                AVItems avItem = item as AVItems;
+                return avItem != null && avItem.FileName.ToLower().Contains(filter);
+            };
+        }
+        private async Task LoadFilesAsync()
+        {
+            resultList.Clear();
+            List<Task<List<AVItems>>> loadTasks = new List<Task<List<AVItems>>>();
 
+            foreach (string dir in dirList.DIRs)
+            {
+                if (Directory.Exists(dir))  // 确保目录存在
+                {
+                    loadTasks.Add(GetFilesAsync(dir));
+                }
+                else
+                {
+                    Debug.WriteLine($"Directory does not exist: {dir}");
+                }
             }
 
+            // 等待所有目录加载任务完成
+            var results = await Task.WhenAll(loadTasks);
 
 
-            int index = pathName.LastIndexOf(" ");
-
-
-            if (index != -1)
+            // 使用Dispatcher确保UI线程上操作
+            Dispatcher.Invoke(() =>
             {
+                foreach (var items in results)
+                {
+                    foreach (var item in items)
+                    {
+                        resultList.Add(item);  // 在UI线程添加到ObservableCollection
+                    }
+                }
+            });
+        }
 
 
-                return pathName.Substring(0, index).Replace("\"", string.Empty);
+        private async Task<List<AVItems>> GetFilesAsync(string path)
+        {
+            var items = new List<AVItems>();
 
+            try
+            {
+                await Task.Run(() =>
+                {
+                    var directoryInfo = new DirectoryInfo(path);
 
+                    // 获取当前目录下所有文件
+                    foreach (FileInfo fi in directoryInfo.EnumerateFiles("*.*"))
+                    {
+                        if (IsMediaFile(fi.Extension))
+                        {
+                            items.Add(new AVItems
+                            {
+                                FileName = fi.Name,
+                                FolderName = fi.DirectoryName,
+                                FullName = fi.FullName
+                            });
+                        }
+                    }
 
+                    // 获取当前目录下所有子目录
+                    foreach (DirectoryInfo di in directoryInfo.EnumerateDirectories())
+                    {
+                        items.Add(new AVItems
+                        {
+
+                            FileName = di.Name,
+                            FolderName = di.Parent.FullName,
+                            FullName = di.FullName
+                        });
+                    }
+                });
             }
-
-            return null;
-
+            catch (UnauthorizedAccessException ex)
+            {
+                MessageBox.Show($"Access denied to {path}: {ex.Message}", "Access Denied", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            catch (DirectoryNotFoundException ex)
+            {
+                MessageBox.Show($"Directory not found: {path}: {ex.Message}", "Directory Not Found", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"An error occurred while processing files and directories in {path}: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            return items;
         }
 
 
 
+
+
+
+
+
+        private bool IsMediaFile(string extension)
+        {
+            string[] mediaExtensions = { ".avi", ".mov", ".mkv", ".wmv", ".flac", ".iso", ".mp3" };
+            return mediaExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase);
+        }
 
         private void DisplayDirList(DirectoryList dirList)
         {
@@ -221,24 +249,32 @@ namespace LibVideo
             {
                 dirTxt.AppendText(s + "\n");
             }
-            
         }
 
-        private void OpenItem(object sender, RoutedEventArgs e)
+        private static string GetPotPlayerPath()
         {
-            DataGridCellInfo cell = (DataGridCellInfo)outputGrid.CurrentCell;
+            var regKey = @"Applications\PotPlayerMini64.exe\shell\open\command";
+            RegistryKey registryKey = Registry.ClassesRoot.OpenSubKey(regKey);
+            string pathName = (string)registryKey.GetValue(null);
+            if (string.IsNullOrEmpty(pathName))
+            {
+                return null;
+            }
 
-            TextBlock tb = outputGrid.Columns[1].GetCellContent(cell.Item) as TextBlock;
-            Process.Start(tb.Text);            
+            int index = pathName.LastIndexOf(" ");
+            if (index != -1)
+            {
+                return pathName.Substring(0, index).Replace("\"", string.Empty);
+            }
 
+            return null;
         }
 
-        private void Row_DoubleClick(object sender, MouseButtonEventArgs e)
+        private void PlayOrOpenItem(object sender, RoutedEventArgs e)
         {
-
             DataGridCellInfo cell = (DataGridCellInfo)outputGrid.CurrentCell;
-            //DataGridRow row = sender as DataGridRow;
             TextBlock item = outputGrid.Columns[1].GetCellContent(cell.Item) as TextBlock;
+
             if (potplayerPath != null)
             {
                 Process.Start(potplayerPath, item.Text);
@@ -248,64 +284,110 @@ namespace LibVideo
                 Process.Start(item.Text);
             }
 
-
         }
 
-
-        private void dirTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        private void Row_DoubleClick(object sender, MouseButtonEventArgs e)
         {
+            DataGridCellInfo cell = (DataGridCellInfo)outputGrid.CurrentCell;
+            TextBlock item = outputGrid.Columns[1].GetCellContent(cell.Item) as TextBlock;
 
-
-        }
-
-
-        
-
-        private void keywords_TextChanged(object sender, TextChangedEventArgs e)
-        {
-            TextBox t = (TextBox)sender;
-            string filter = t.Text;
-            ICollectionView cv = CollectionViewSource.GetDefaultView(outputGrid.ItemsSource);
-            cv.Filter = o =>
+            if (potplayerPath != null)
             {
-                AVItems av = o as AVItems;
-                if (av.FullName.Contains(filter, StringComparison.OrdinalIgnoreCase)){ return true; }
-                return false;
-            };
+                Process.Start(potplayerPath, item.Text);
+            }
+            else
+            {
+                Process.Start(item.Text);
             }
 
-        private void dirButton_Click(object sender, RoutedEventArgs e)
-        {
-            var dlg = new CommonOpenFileDialog();
-            dlg.Title = "选择文件夹";
-            dlg.IsFolderPicker = true;
-            
+        }
 
-            dlg.AddToMostRecentlyUsedList = false;
-            dlg.AllowNonFileSystemItems = false;
-            
-            dlg.EnsureFileExists = true;
-            dlg.EnsurePathExists = true;
-            dlg.EnsureReadOnly = false;
-            dlg.EnsureValidNames = true;
-            dlg.Multiselect = false;
-            dlg.ShowPlacesList = true;
+        private void OpenContainingFolder(object sender, RoutedEventArgs e)
+        {
+            // 获取当前选中的单元格信息
+            DataGridCellInfo cell = outputGrid.CurrentCell;
+
+            // 尝试获取单元格内容作为TextBlock
+            TextBlock tb = outputGrid.Columns[1].GetCellContent(cell.Item) as TextBlock;
+
+            if (tb != null)
+            {
+                string filePath = tb.Text;
+
+                // 检查文件是否存在
+                if (File.Exists(filePath))
+                {
+                    // 使用explorer.exe的/select,参数打开文件所在的目录并选中该文件
+                    Process.Start("explorer.exe", $"/select,\"{filePath}\"");
+                }
+                else if (Directory.Exists(filePath))
+                {
+                    // 如果是文件夹，直接打开该文件夹
+                    Process.Start("explorer.exe", $"\"{filePath}\"");
+                }
+                else
+                {
+                    MessageBox.Show("指定的文件或目录不存在。", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }
+
+        private async void dirButton_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new CommonOpenFileDialog
+            {
+                Title = "选择文件夹",
+                IsFolderPicker = true,
+                AddToMostRecentlyUsedList = false,
+                AllowNonFileSystemItems = false,
+                EnsureFileExists = true,
+                EnsurePathExists = true,
+                EnsureReadOnly = false,
+                EnsureValidNames = true,
+                Multiselect = false,
+                ShowPlacesList = true
+            };
 
             if (dlg.ShowDialog() == CommonFileDialogResult.Ok)
             {
                 var folder = dlg.FileName;
-
                 dirList.AddDirectory(folder);
                 DisplayDirList(dirList);
-                resultList = new ResultList(dirList.DIRs);
+                await LoadFilesAsync();
+            }
+        }
+    }
 
-                outputGrid.ItemsSource = null;
-                outputGrid.ItemsSource = resultList.RESULTLIST;
-                
-            }   
+    public class DirectoryList
+    {
+        private List<string> directories = new List<string> { @"\\ds1817\Movies\", @"\\ds1517\Movies\", @"\\ds1817\TVs\", @"\\ds1817\Documentary\", @"\\DISKSTATION2\Movies" };
 
+        public void AddDirectory(string directory)
+        {
+            if (!directories.Contains(directory))
+            {
+
+                directories.Add(directory);
+            }
         }
 
-        
+        public List<string> DIRs
+        {
+            get { return directories; }
+        }
+    }
+
+    public class AVItems
+    {
+        private static int nextId = 1;
+        public int Id { get; set; }
+        public string FileName { get; set; }
+        public string FolderName { get; set; }
+        public string FullName { get; set; }
+
+        public AVItems()
+        {
+            Id = nextId++;  // 构造函数中分配ID，并递增计数器
+        }
     }
 }
