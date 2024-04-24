@@ -3,7 +3,8 @@
  * 2. 显示splash screen
  * 3. 优化UI，添加前后图标，显示之前和之后搜索的结果
  * 4. 列出最近和频繁搜索的关键字
- * 5. 定时更新显示
+ * 5. （已完成）定时更新显示
+ * 6. 为什么水平滚动条不显示？ * 
  */
 
 using System;
@@ -39,14 +40,15 @@ namespace LibVideo
         private DirectoryList dirList = new DirectoryList();
         private ObservableCollection<AVItems> resultList = new ObservableCollection<AVItems>();
         private string potplayerPath = GetPotPlayerPath();
+        private int initialItemCount = 0;  // 在首次加载数据后设置这个值
 
         public MainWindow()
         {
             InitializeComponent();
             this.Loaded += MainWindow_Loaded;
             outputGrid.ItemsSource = resultList;  // 只设置一次
-                                                  // 设置定时器
-            DispatcherTimer timer = new DispatcherTimer();
+                                                  
+            DispatcherTimer timer = new DispatcherTimer(); // 设置定时器
             timer.Interval = TimeSpan.FromSeconds(60); // 每60秒检查一次
             timer.Tick += Timer_Tick;
             timer.Start();
@@ -76,13 +78,27 @@ namespace LibVideo
                     {
                         resultList.Add(item);
                     }
+
+                    UpdateStatusBar(); // 更新状态栏信息
                 });
+
+                
             }
         }
 
-        
 
+        private void UpdateStatusBar()
+        {
+            // 更新总项数
+            totalItemsText.Text = $"媒体文件或文件夹共计: {resultList.Count} 个";
 
+            // 计算从首次加载后新增的项数
+            if (initialItemCount > 0)
+            {
+                int newItemsCount = resultList.Count - initialItemCount;
+                itemsAddedLast24HoursText.Text = $"首次加载后新增了: {newItemsCount} 个";
+            }
+        }
 
 
 
@@ -174,6 +190,15 @@ namespace LibVideo
                     }
                 }
             });
+
+            // 首次加载后设置初始项数
+            if (initialItemCount == 0) // 保证只在首次加载时设置
+            {
+                initialItemCount = resultList.Count;
+            }
+
+            // 更新状态栏
+            UpdateStatusBar();
         }
 
 
@@ -270,18 +295,89 @@ namespace LibVideo
             return null;
         }
 
-        private void PlayOrOpenItem(object sender, RoutedEventArgs e)
+        private void OpenMediaOrFile(string filePath)
         {
-            DataGridCellInfo cell = (DataGridCellInfo)outputGrid.CurrentCell;
-            TextBlock item = outputGrid.Columns[1].GetCellContent(cell.Item) as TextBlock;
-
-            if (potplayerPath != null)
+            if (!string.IsNullOrEmpty(filePath))
             {
-                Process.Start(potplayerPath, item.Text);
+                // 检查路径是否指向ISO文件或目录中是否存在ISO文件
+                if (IsIsoFile(filePath) || ContainsIsoFile(filePath))
+                {
+                    // 如果是ISO文件或目录中有ISO文件，使用特定的处理逻辑
+                    StartProcessForIso(filePath);
+                }
+                else if (File.Exists(filePath) || Directory.Exists(filePath))
+                {
+                    // 处理其他类型的文件或目录
+                    StartProcess(filePath);
+                }
+                else
+                {
+                    MessageBox.Show("The file path does not exist or is not valid.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
             }
             else
             {
-                Process.Start(item.Text);
+                MessageBox.Show("The file path is empty or invalid.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private bool IsIsoFile(string filePath)
+        {
+            return Path.GetExtension(filePath).Equals(".iso", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private bool ContainsIsoFile(string directoryPath)
+        {
+            if (Directory.Exists(directoryPath))
+            {
+                return Directory.GetFiles(directoryPath, "*.iso", SearchOption.TopDirectoryOnly).FirstOrDefault() != null;
+            }
+            return false;
+        }
+
+        private void StartProcessForIso(string filePath)
+        {
+            string isoFilePath = filePath;
+
+            if (Directory.Exists(filePath))
+            {
+                // 如果是目录，尝试找到第一个ISO文件
+                isoFilePath = Directory.GetFiles(filePath, "*.iso", SearchOption.TopDirectoryOnly).FirstOrDefault();
+            }
+
+            if (!string.IsNullOrEmpty(isoFilePath))
+            {
+                Process.Start(isoFilePath); // 使用默认关联应用打开ISO文件
+            }
+            else
+            {
+                MessageBox.Show("No ISO file found in the specified directory.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void StartProcess(string filePath)
+        {
+            if (potplayerPath != null && !IsIsoFile(filePath))
+            {
+                // 如果配置了 potplayerPath 并且文件不是.iso，使用 PotPlayer 打开
+                Process.Start(potplayerPath, filePath);
+            }
+            else
+            {
+                // 否则使用系统默认程序打开文件
+                Process.Start(filePath);
+            }
+        }
+
+
+
+
+        private void PlayOrOpenItem(object sender, RoutedEventArgs e)
+        {
+            DataGridCellInfo cell = (DataGridCellInfo)outputGrid.CurrentCell;
+            if (cell.Item is AVItems avItem)
+            {
+                OpenMediaOrFile(avItem.FullName);
             }
 
         }
@@ -289,18 +385,12 @@ namespace LibVideo
         private void Row_DoubleClick(object sender, MouseButtonEventArgs e)
         {
             DataGridCellInfo cell = (DataGridCellInfo)outputGrid.CurrentCell;
-            TextBlock item = outputGrid.Columns[1].GetCellContent(cell.Item) as TextBlock;
-
-            if (potplayerPath != null)
+            if (cell.Item is AVItems avItem)
             {
-                Process.Start(potplayerPath, item.Text);
+                OpenMediaOrFile(avItem.FullName);
             }
-            else
-            {
-                Process.Start(item.Text);
-            }
-
         }
+
 
         private void OpenContainingFolder(object sender, RoutedEventArgs e)
         {
@@ -388,6 +478,9 @@ namespace LibVideo
         public AVItems()
         {
             Id = nextId++;  // 构造函数中分配ID，并递增计数器
+            CreationTime = DateTime.Now; // 初始化时设置创建时间
         }
+
+        public DateTime CreationTime { get; private set; }
     }
 }

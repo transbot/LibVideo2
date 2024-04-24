@@ -6,43 +6,58 @@
         xmlns:local="clr-namespace:LibVideo"
         mc:Ignorable="d"
         Title="我家视频" Height="527.371" Width="800"
-        WindowState="Normal" ResizeMode="NoResize"
-          
-    >
+        WindowState="Normal" ResizeMode="NoResize"  >
+
+
+
     <Grid>
-
-
         <TextBox x:Name="dirTxt" HorizontalAlignment="Left" Height="113" Margin="630,10,0,0" TextWrapping="NoWrap" VerticalAlignment="Top" Width="147" TextChanged="dirTextBox_TextChanged"/>
         <Button Content="添加视频目录" HorizontalAlignment="Left" Height="27" Margin="669,128,0,0" VerticalAlignment="Top" Width="80" Click="dirButton_Click"/>
-        <Label Content="" HorizontalAlignment="Center" Height="33" Margin="81.667,60,62.666,406.333" VerticalAlignment="Center" Width="153" FontSize="18" Grid.Column="2" Grid.ColumnSpan="2"/>
-        <DataGrid  x:Name="outputGrid" HorizontalAlignment="Left" Height="456" Margin="10,43,0,0" VerticalAlignment="Top" Width="615"
-                   AutoGenerateColumns="False" SelectionMode="Single" SelectionUnit="Cell" IsReadOnly="true">
-            <DataGrid.Columns>
-                <DataGridTextColumn Header="编号" Binding="{Binding Id}" />
-                <DataGridTextColumn Header="视频" Binding="{Binding FullName}" />
-            </DataGrid.Columns>
-
-            <DataGrid.Resources>
-                <Style TargetType="DataGridRow">
-                    <EventSetter Event="MouseDoubleClick" Handler="Row_DoubleClick"/>
-                </Style>
-            </DataGrid.Resources>
 
 
-            <DataGrid.ContextMenu>
-                <ContextMenu>
-                    <!--<MenuItem Header="复制" Command="Copy" />-->
-                    <MenuItem Header="播放" Click="PlayOrOpenItem" />
-                    <MenuItem Header="打开文件夹" Click="OpenContainingFolder" />
-                </ContextMenu>
-            </DataGrid.ContextMenu>
-        </DataGrid>
+        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+            <DataGrid  x:Name="outputGrid" Height="402" Margin="10,43,0,0" Width="611"
+ AutoGenerateColumns="False" SelectionMode="Single" SelectionUnit="Cell" IsReadOnly="true" HorizontalAlignment="Left">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="编号" Binding="{Binding Id}" />
+                    <DataGridTextColumn Header="视频" Binding="{Binding FullName}">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="ToolTip" Value="{Binding FullName}" />
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+                </DataGrid.Columns>
+
+                <DataGrid.Resources>
+                    <Style TargetType="DataGridRow">
+                        <EventSetter Event="MouseDoubleClick" Handler="Row_DoubleClick"/>
+                    </Style>
+                </DataGrid.Resources>
+
+                <DataGrid.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="播放" Click="PlayOrOpenItem" />
+                        <MenuItem Header="打开文件夹" Click="OpenContainingFolder" />
+                    </ContextMenu>
+                </DataGrid.ContextMenu>
+            </DataGrid>
+
+        </ScrollViewer>
 
         <TextBox  x:Name="keywords" HorizontalAlignment="Left" Height="28" Margin="190,10,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="251" TextChanged="keywords_TextChanged" />
         <Image Grid.Column="2" HorizontalAlignment="Left" Height="26" Margin="62.667,297,0,0" VerticalAlignment="Top" Width="113"/>
         <Label Content="搜索：" HorizontalAlignment="Left" Height="37" Margin="143,10,0,0" VerticalAlignment="Top" Width="63"/>
 
-
+        <!-- 状态栏 -->
+        <StatusBar VerticalAlignment="Bottom">
+            <StatusBarItem>
+                <TextBlock x:Name="totalItemsText"/>
+            </StatusBarItem>
+            <StatusBarItem>
+                <TextBlock x:Name="itemsAddedLast24HoursText"/>
+            </StatusBarItem>
+        </StatusBar>
     </Grid>
 
 </Window>
