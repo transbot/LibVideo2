@@ -39,6 +39,7 @@ namespace LibVideo.ViewModels
             RefreshCacheCommand = new AsyncRelayCommand(RefreshCacheAsync);
 
             LoadDirectories();
+            SetupWatchers();
             if (File.Exists("player.txt")) customPlayerPath = File.ReadAllText("player.txt");
             _ = InitializeDataAsync();
         }
@@ -202,6 +203,51 @@ namespace LibVideo.ViewModels
         public IAsyncRelayCommand RefreshCacheCommand { get; }
 
         private List<VideoItem> _allDatabaseItems = new List<VideoItem>();
+        private List<FileSystemWatcher> _watchers = new List<FileSystemWatcher>();
+        private System.Windows.Threading.DispatcherTimer _debounceTimer;
+
+        private void SetupWatchers()
+        {
+            foreach (var w in _watchers)
+            {
+                w.EnableRaisingEvents = false;
+                w.Dispose();
+            }
+            _watchers.Clear();
+
+            foreach (var dir in Directories)
+            {
+                if (Directory.Exists(dir))
+                {
+                    var watcher = new FileSystemWatcher(dir);
+                    watcher.IncludeSubdirectories = false;
+                    watcher.Created += Watcher_Changed;
+                    watcher.Deleted += Watcher_Changed;
+                    watcher.Renamed += Watcher_Changed;
+                    watcher.EnableRaisingEvents = true;
+                    _watchers.Add(watcher);
+                }
+            }
+        }
+
+        private void Watcher_Changed(object sender, FileSystemEventArgs e)
+        {
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                if (_debounceTimer == null)
+                {
+                    _debounceTimer = new System.Windows.Threading.DispatcherTimer();
+                    _debounceTimer.Interval = TimeSpan.FromSeconds(1);
+                    _debounceTimer.Tick += async (s, args) =>
+                    {
+                        _debounceTimer.Stop();
+                        await RefreshFromDiskAsync();
+                    };
+                }
+                _debounceTimer.Stop();
+                _debounceTimer.Start();
+            });
+        }
         private int searchHistoryIndex = -1;
 
         private void LoadDirectories()
@@ -224,6 +270,7 @@ namespace LibVideo.ViewModels
             {
                 Directories.Add(path);
                 SaveDirectories();
+                SetupWatchers();
                 await RefreshFromDiskAsync();
             }
         }
@@ -235,6 +282,7 @@ namespace LibVideo.ViewModels
                 _dbManager.RemoveDirectoryItems(SelectedDirectory);
                 Directories.Remove(SelectedDirectory);
                 SaveDirectories();
+                SetupWatchers();
                 await LoadFromDatabaseAsync();
             }
         }
@@ -276,6 +324,7 @@ namespace LibVideo.ViewModels
         {
             IsLoading = true;
             var currentFilesList = new List<VideoItem>();
+            var scannedRoots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             await Task.Run(() =>
             {
@@ -283,6 +332,10 @@ namespace LibVideo.ViewModels
                 {
                     if (Directory.Exists(dir))
                     {
+                        string safeDir = dir;
+                        if (!safeDir.EndsWith("\\")) safeDir += "\\";
+                        scannedRoots.Add(safeDir);
+                        
                         var di = new DirectoryInfo(dir);
                         try {
                             foreach (var fi in di.EnumerateFiles("*.*"))
@@ -297,7 +350,7 @@ namespace LibVideo.ViewModels
                         } catch { }
                     }
                 }
-                _dbManager.InsertOrUpdateItems(currentFilesList);
+                _dbManager.SyncDiskItems(currentFilesList, scannedRoots);
             });
             
             await LoadFromDatabaseAsync();

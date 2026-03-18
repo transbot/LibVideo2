@@ -56,7 +56,7 @@
                 <Button Style="{StaticResource MaterialDesignFloatingActionMiniButton}" Command="{Binding RefreshCacheCommand}" Height="40" Width="40" ToolTip="清空海报与简介缓存库 (重置识别)" Margin="0,0,10,0" Background="{DynamicResource PrimaryHueDarkBrush}" BorderBrush="Transparent">
                     <materialDesign:PackIcon Kind="DatabaseRefresh" Height="24" Width="24" Foreground="White" />
                 </Button>
-                <Button x:Name="btnSettings" Style="{StaticResource MaterialDesignFloatingActionMiniButton}" Click="btnSettings_Click" Height="40" Width="40" ToolTip="管理视频目录">
+                <Button x:Name="btnSettings" Style="{StaticResource MaterialDesignFloatingActionMiniButton}" Click="btnSettings_Click" Height="40" Width="40" ToolTip="设置与管理视频目录">
                     <materialDesign:PackIcon Kind="Settings" Height="24" Width="24" />
                 </Button>
             </StackPanel>

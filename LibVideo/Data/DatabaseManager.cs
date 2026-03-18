@@ -14,15 +14,30 @@ namespace LibVideo.Data
             dbPath = path;
         }
 
-        public void InsertOrUpdateItems(IEnumerable<VideoItem> items)
+        public void SyncDiskItems(IEnumerable<VideoItem> currentFilesList, HashSet<string> scannedRoots)
         {
             using (var db = new LiteDatabase(dbPath))
             {
                 var col = db.GetCollection<VideoItem>("videos");
                 col.EnsureIndex(x => x.FullName, true);
                 
-                var existingFiles = new HashSet<string>(col.FindAll().Select(v => v.FullName));
-                var newItems = items.Where(i => !existingFiles.Contains(i.FullName)).ToList();
+                var allDb = col.FindAll().ToList();
+                var currentPaths = new HashSet<string>(currentFilesList.Select(x => x.FullName), System.StringComparer.OrdinalIgnoreCase);
+
+                foreach(var dbItem in allDb)
+                {
+                    bool isUnderScannedRoot = scannedRoots.Any(root => dbItem.FullName.StartsWith(root, System.StringComparison.OrdinalIgnoreCase));
+                    if (isUnderScannedRoot)
+                    {
+                        if (!currentPaths.Contains(dbItem.FullName))
+                        {
+                            col.Delete(dbItem.Id);
+                        }
+                    }
+                }
+                
+                var existingFiles = new HashSet<string>(col.FindAll().Select(v => v.FullName), System.StringComparer.OrdinalIgnoreCase);
+                var newItems = currentFilesList.Where(i => !existingFiles.Contains(i.FullName)).ToList();
 
                 if (newItems.Count > 0)
                 {
