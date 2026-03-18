@@ -1,4 +1,4 @@
-/* todo: 
+﻿/* todo: 
  * 1. 允许删除目录
  * 2. 显示splash screen
  * 3. 优化UI，添加前后图标，显示之前和之后搜索的结果
@@ -41,8 +41,6 @@ namespace LibVideo
         private ObservableCollection<AVItems> resultList = new ObservableCollection<AVItems>();
         private string potplayerPath = GetPotPlayerPath();
         private int initialItemCount = 0;  // 在首次加载数据后设置这个值
-        private List<string> searchHistory = new List<string>();
-        private int historyIndex = -1;
 
         public MainWindow()
         {
@@ -76,10 +74,8 @@ namespace LibVideo
                 Dispatcher.Invoke(() =>
                 {
                     resultList.Clear();
-                    int currentId = 1;
                     foreach (var item in currentItems)
                     {
-                        item.Id = currentId++;
                         resultList.Add(item);
                     }
 
@@ -140,82 +136,32 @@ namespace LibVideo
             outputGrid.ItemsSource = resultList;
         }
 
-        private async void btnDeleteDir_Click(object sender, RoutedEventArgs e)
+        private void dirTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
-            if (dirListUI.SelectedItem is string selectedDir)
+            // 获取当前文本框中的文本
+            var textBox = sender as TextBox;
+            if (textBox != null)
             {
-                dirList.RemoveDirectory(selectedDir);
-                DisplayDirList(dirList);
-                await LoadFilesAsync();
+                // 假设dirTxt是一个显示目录地址的TextBlock或类似控件
+                dirTxt.Text = textBox.Text;
             }
         }
 
         private void keywords_TextChanged(object sender, TextChangedEventArgs e)
         {
-            string filter = keywords.Text?.ToLower() ?? "";
+            TextBox textBox = sender as TextBox;
+            string filter = textBox.Text.ToLower();
             ICollectionView collectionView = CollectionViewSource.GetDefaultView(outputGrid.ItemsSource);
-            if (collectionView != null)
+            collectionView.Filter = (item) =>
             {
-                collectionView.Filter = (item) =>
-                {
-                    AVItems avItem = item as AVItems;
-                    return avItem != null && avItem.FileName.ToLower().Contains(filter);
-                };
-            }
-        }
-
-        private void keywords_KeyDown(object sender, KeyEventArgs e)
-        {
-            if (e.Key == Key.Enter)
-            {
-                string text = keywords.Text?.Trim() ?? "";
-                if (!string.IsNullOrEmpty(text))
-                {
-                    if (searchHistory.Count == 0 || searchHistory.Last() != text)
-                    {
-                        searchHistory.Add(text);
-                        if (searchHistory.Count > 5)
-                        {
-                            searchHistory.RemoveAt(0);
-                        }
-                        
-                        keywords.ItemsSource = null;
-                        keywords.ItemsSource = searchHistory;
-                    }
-                    historyIndex = searchHistory.Count;
-                }
-            }
-        }
-
-        private void btnPrevSearch_Click(object sender, RoutedEventArgs e)
-        {
-            if (searchHistory.Count > 0 && historyIndex > 0)
-            {
-                historyIndex--;
-                keywords.Text = searchHistory[historyIndex];
-            }
-        }
-
-        private void btnNextSearch_Click(object sender, RoutedEventArgs e)
-        {
-            if (searchHistory.Count > 0 && historyIndex < searchHistory.Count - 1)
-            {
-                historyIndex++;
-                keywords.Text = searchHistory[historyIndex];
-            }
-            else if (searchHistory.Count > 0 && historyIndex == searchHistory.Count - 1)
-            {
-                historyIndex++;
-                keywords.Text = "";
-            }
+                AVItems avItem = item as AVItems;
+                return avItem != null && avItem.FileName.ToLower().Contains(filter);
+            };
         }
         private async Task LoadFilesAsync()
         {
-            LoadingOverlay.Visibility = Visibility.Visible;
-            try
-            {
-                resultList.Clear();
-                List<Task<List<AVItems>>> loadTasks = new List<Task<List<AVItems>>>();
+            resultList.Clear();
+            List<Task<List<AVItems>>> loadTasks = new List<Task<List<AVItems>>>();
 
             foreach (string dir in dirList.DIRs)
             {
@@ -236,12 +182,10 @@ namespace LibVideo
             // 使用Dispatcher确保UI线程上操作
             Dispatcher.Invoke(() =>
             {
-                int currentId = 1;
                 foreach (var items in results)
                 {
                     foreach (var item in items)
                     {
-                        item.Id = currentId++;
                         resultList.Add(item);  // 在UI线程添加到ObservableCollection
                     }
                 }
@@ -255,11 +199,6 @@ namespace LibVideo
 
             // 更新状态栏
             UpdateStatusBar();
-            }
-            finally
-            {
-                LoadingOverlay.Visibility = Visibility.Collapsed;
-            }
         }
 
 
@@ -330,8 +269,11 @@ namespace LibVideo
 
         private void DisplayDirList(DirectoryList dirList)
         {
-            dirListUI.ItemsSource = null;
-            dirListUI.ItemsSource = dirList.DIRs;
+            dirTxt.Clear();
+            foreach (string s in dirList.DIRs)
+            {
+                dirTxt.AppendText(s + "\n");
+            }
         }
 
         private static string GetPotPlayerPath()
@@ -405,14 +347,7 @@ namespace LibVideo
 
             if (!string.IsNullOrEmpty(isoFilePath))
             {
-                if (potplayerPath != null)
-                {
-                    Process.Start(potplayerPath, isoFilePath); // 使用Potplayer打开ISO文件
-                }
-                else
-                {
-                    Process.Start(new ProcessStartInfo(isoFilePath) { UseShellExecute = true }); // 使用系统默认程序打开
-                }
+                Process.Start(isoFilePath); // 使用默认关联应用打开ISO文件
             }
             else
             {
@@ -462,9 +397,12 @@ namespace LibVideo
             // 获取当前选中的单元格信息
             DataGridCellInfo cell = outputGrid.CurrentCell;
 
-            if (cell.Item is AVItems avItem)
+            // 尝试获取单元格内容作为TextBlock
+            TextBlock tb = outputGrid.Columns[1].GetCellContent(cell.Item) as TextBlock;
+
+            if (tb != null)
             {
-                string filePath = avItem.FullName;
+                string filePath = tb.Text;
 
                 // 检查文件是否存在
                 if (File.Exists(filePath))
@@ -512,42 +450,14 @@ namespace LibVideo
 
     public class DirectoryList
     {
-        private List<string> directories = new List<string>();
-        private string configPath = "directories.txt";
-
-        public DirectoryList()
-        {
-            LoadDirectories();
-        }
-
-        private void LoadDirectories()
-        {
-            if (File.Exists(configPath))
-            {
-                directories = new List<string>(File.ReadAllLines(configPath));
-            }
-        }
-
-        public void SaveDirectories()
-        {
-            File.WriteAllLines(configPath, directories);
-        }
+        private List<string> directories = new List<string> { @"\\ds1817\Movies\", @"\\ds1517\Movies\", @"\\ds1817\TVs\", @"\\ds1817\Documentary\", @"\\DISKSTATION2\Movies" };
 
         public void AddDirectory(string directory)
         {
             if (!directories.Contains(directory))
             {
-                directories.Add(directory);
-                SaveDirectories();
-            }
-        }
 
-        public void RemoveDirectory(string directory)
-        {
-            if (directories.Contains(directory))
-            {
-                directories.Remove(directory);
-                SaveDirectories();
+                directories.Add(directory);
             }
         }
 
@@ -559,6 +469,7 @@ namespace LibVideo
 
     public class AVItems
     {
+        private static int nextId = 1;
         public int Id { get; set; }
         public string FileName { get; set; }
         public string FolderName { get; set; }
@@ -566,6 +477,7 @@ namespace LibVideo
 
         public AVItems()
         {
+            Id = nextId++;  // 构造函数中分配ID，并递增计数器
             CreationTime = DateTime.Now; // 初始化时设置创建时间
         }
 
