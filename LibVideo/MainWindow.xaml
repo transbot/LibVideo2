@@ -4,68 +4,102 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:LibVideo"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
         mc:Ignorable="d"
-        Title="我家视频" Height="527.371" Width="800"
-        WindowState="Normal" ResizeMode="NoResize"  >
+        TextElement.Foreground="{DynamicResource MaterialDesignBody}"
+        TextElement.FontWeight="Regular"
+        TextElement.FontSize="13"
+        TextOptions.TextFormattingMode="Ideal"
+        TextOptions.TextRenderingMode="Auto"
+        Background="{DynamicResource MaterialDesignPaper}"
+        Title="我家视频" Height="600" Width="1000"
+        WindowState="Normal" WindowStartupLocation="CenterScreen">
+    
+    <Window.DataContext>
+        <localViewModels:MainViewModel xmlns:localViewModels="clr-namespace:LibVideo.ViewModels"/>
+    </Window.DataContext>
 
-
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+    </Window.Resources>
 
     <Grid>
-        <ListBox x:Name="dirListUI" HorizontalAlignment="Left" Height="113" Margin="630,10,0,0" VerticalAlignment="Top" Width="147" Panel.ZIndex="1" />
-        <Button Content="添加视频目录" HorizontalAlignment="Left" Height="27" Margin="630,128,0,0" VerticalAlignment="Top" Width="70" Click="dirButton_Click" IsEnabled="True" IsHitTestVisible="True" Panel.ZIndex="1" Background="LightBlue"/>
-        <Button x:Name="btnDeleteDir" Content="删除选中" HorizontalAlignment="Left" Height="27" Margin="705,128,0,0" VerticalAlignment="Top" Width="70" Click="btnDeleteDir_Click" Background="#FFFF9999" Panel.ZIndex="1"/>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
 
+        <!-- Top Header -->
+        <Grid Grid.Row="0" Margin="16,10,16,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
 
-        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
-            <DataGrid  x:Name="outputGrid" Height="402" Margin="10,43,0,0" Width="611"
- AutoGenerateColumns="False" SelectionMode="Single" SelectionUnit="Cell" IsReadOnly="true" HorizontalAlignment="Left">
-                <DataGrid.Columns>
-                    <DataGridTextColumn Header="编号" Binding="{Binding Id}" />
-                    <DataGridTextColumn Header="视频" Binding="{Binding FullName}">
-                        <DataGridTextColumn.ElementStyle>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="ToolTip" Value="{Binding FullName}" />
-                            </Style>
-                        </DataGridTextColumn.ElementStyle>
-                    </DataGridTextColumn>
-                </DataGrid.Columns>
+            <StackPanel Orientation="Horizontal" Grid.Column="0">
+                <ComboBox x:Name="keywords" Style="{StaticResource MaterialDesignFloatingHintComboBox}" materialDesign:HintAssist.Hint="搜索视频文件..." materialDesign:TextFieldAssist.HasClearButton="True" ItemsSource="{Binding SearchHistory}" Text="{Binding SearchKeyword, UpdateSourceTrigger=PropertyChanged}" IsEditable="True" Height="45" Width="300" VerticalAlignment="Center" Margin="0,0,10,0">
+                    <ComboBox.InputBindings>
+                        <KeyBinding Key="Enter" Command="{Binding CommitSearchCommand}"/>
+                    </ComboBox.InputBindings>
+                </ComboBox>
+                <Button x:Name="btnPrevSearch" Style="{StaticResource MaterialDesignFloatingActionMiniButton}" Command="{Binding PrevSearchCommand}" Height="30" Width="30" ToolTip="上一个搜索" VerticalAlignment="Center" Margin="0,0,10,0">
+                    <materialDesign:PackIcon Kind="ChevronLeft" />
+                </Button>
+                <Button x:Name="btnNextSearch" Style="{StaticResource MaterialDesignFloatingActionMiniButton}" Command="{Binding NextSearchCommand}" Height="30" Width="30" ToolTip="下一个搜索" VerticalAlignment="Center" Margin="0,0,10,0">
+                    <materialDesign:PackIcon Kind="ChevronRight" />
+                </Button>
+            </StackPanel>
 
-                <DataGrid.Resources>
-                    <Style TargetType="DataGridRow">
-                        <EventSetter Event="MouseDoubleClick" Handler="Row_DoubleClick"/>
-                    </Style>
-                </DataGrid.Resources>
+            <Button Grid.Column="1" x:Name="btnSettings" Style="{StaticResource MaterialDesignFloatingActionMiniButton}" Click="btnSettings_Click" Height="40" Width="40" ToolTip="管理视频目录" VerticalAlignment="Center">
+                <materialDesign:PackIcon Kind="Settings" Height="24" Width="24" />
+            </Button>
+        </Grid>
 
-                <DataGrid.ContextMenu>
-                    <ContextMenu>
-                        <MenuItem Header="播放" Click="PlayOrOpenItem" />
-                        <MenuItem Header="打开文件夹" Click="OpenContainingFolder" />
-                    </ContextMenu>
-                </DataGrid.ContextMenu>
-            </DataGrid>
+        <!-- Main DataGrid -->
+        <DataGrid Grid.Row="1" x:Name="outputGrid" Style="{StaticResource MaterialDesignDataGrid}" ItemsSource="{Binding VideoItems}" Margin="16,0,16,0" AutoGenerateColumns="False" SelectionMode="Single" SelectionUnit="FullRow" IsReadOnly="true" VirtualizingPanel.IsVirtualizing="True">
+            <DataGrid.CellStyle>
+                <Style TargetType="DataGridCell" BasedOn="{StaticResource MaterialDesignDataGridCell}">
+                    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                    <Setter Property="BorderThickness" Value="0" />
+                </Style>
+            </DataGrid.CellStyle>
+            <DataGrid.RowStyle>
+                <Style TargetType="DataGridRow" BasedOn="{StaticResource MaterialDesignDataGridRow}">
+                    <EventSetter Event="MouseDoubleClick" Handler="Row_DoubleClick" />
+                </Style>
+            </DataGrid.RowStyle>
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="编号" Binding="{Binding Id}" />
+                <DataGridTextColumn Header="录入日期" Binding="{Binding CreationTime, StringFormat=\{0:yyyy-MM-dd HH:mm\}}" />
+                <DataGridTextColumn Header="路径" Binding="{Binding FolderName}" Width="*" />
+                <DataGridTextColumn Header="文件名" Binding="{Binding FileName}" Width="*" />
+            </DataGrid.Columns>
 
-        </ScrollViewer>
+            <DataGrid.ContextMenu>
+                <ContextMenu>
+                    <MenuItem Header="播放" Click="PlayOrOpenItem" />
+                    <MenuItem Header="打开文件夹" Click="OpenContainingFolder" />
+                </ContextMenu>
+            </DataGrid.ContextMenu>
+        </DataGrid>
 
-        <ComboBox x:Name="keywords" IsEditable="True" HorizontalAlignment="Left" Height="28" Margin="190,10,0,0" VerticalAlignment="Top" Width="221" TextBoxBase.TextChanged="keywords_TextChanged" KeyDown="keywords_KeyDown" Panel.ZIndex="1"/>
-        <Button x:Name="btnPrevSearch" Content="&lt;" HorizontalAlignment="Left" Height="28" Margin="415,10,0,0" VerticalAlignment="Top" Width="25" Click="btnPrevSearch_Click" ToolTip="上一个搜索" Panel.ZIndex="1"/>
-        <Button x:Name="btnNextSearch" Content="&gt;" HorizontalAlignment="Left" Height="28" Margin="445,10,0,0" VerticalAlignment="Top" Width="25" Click="btnNextSearch_Click" ToolTip="下一个搜索" Panel.ZIndex="1"/>
-        <Image Grid.Column="2" HorizontalAlignment="Left" Height="26" Margin="62.667,297,0,0" VerticalAlignment="Top" Width="113"/>
-        <Label Content="搜索：" HorizontalAlignment="Left" Height="37" Margin="143,10,0,0" VerticalAlignment="Top" Width="63"/>
-
-        <!-- 状态栏 -->
-        <StatusBar VerticalAlignment="Bottom">
+        <!-- Status Bar -->
+        <StatusBar Grid.Row="2" Margin="0,5,0,0">
             <StatusBarItem>
-                <TextBlock x:Name="totalItemsText"/>
+                <TextBlock x:Name="totalItemsText" Text="{Binding TotalItemsText}"/>
             </StatusBarItem>
             <StatusBarItem>
-                <TextBlock x:Name="itemsAddedLast24HoursText"/>
+                <TextBlock x:Name="itemsAddedLast24HoursText" Text="{Binding ItemsAddedLast24HoursText}"/>
             </StatusBarItem>
         </StatusBar>
-        
+
         <!-- Loading Overlay -->
-        <Grid x:Name="LoadingOverlay" Background="#99000000" Panel.ZIndex="100" Visibility="Collapsed">
-            <TextBlock Text="正在加载文件，请稍候..." Foreground="White" FontSize="20" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        <Grid Grid.RowSpan="3" x:Name="LoadingOverlay" Background="#99000000" Panel.ZIndex="100" Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <ProgressBar Style="{StaticResource MaterialDesignCircularProgressBar}" Value="0" IsIndeterminate="True" Width="50" Height="50" Margin="0,0,0,16" Foreground="White" />
+                <TextBlock Text="正在加载文件，请稍候..." Foreground="White" FontSize="20"/>
+            </StackPanel>
         </Grid>
     </Grid>
-
 </Window>

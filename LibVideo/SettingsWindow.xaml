@@ -1,0 +1,28 @@
+<Window x:Class="LibVideo.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        Title="目录设置" Height="350" Width="450"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        TextElement.Foreground="{DynamicResource MaterialDesignBody}"
+        Background="{DynamicResource MaterialDesignPaper}">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        
+        <TextBlock Text="配置您的视频扫描目录：" FontSize="16" FontWeight="Bold" Margin="0,0,0,10" />
+        
+        <ListBox x:Name="dirListUI" Grid.Row="1" Style="{StaticResource MaterialDesignListBox}" 
+                 ItemsSource="{Binding Directories}" SelectedItem="{Binding SelectedDirectory}" 
+                 Margin="0,0,0,16" Background="#f5f5f5" />
+                 
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="添加视频目录" Style="{StaticResource MaterialDesignRaisedButton}" Click="AddDir_Click" Margin="0,0,10,0" />
+            <Button Content="删除选中" Style="{StaticResource MaterialDesignOutlinedButton}" Command="{Binding DeleteSelectedDirectoryCommand}" Foreground="#c62828" BorderBrush="#c62828" />
+        </StackPanel>
+    </Grid>
+</Window>
