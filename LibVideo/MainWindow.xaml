@@ -28,6 +28,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!-- Top Header -->
@@ -51,13 +52,18 @@
                 </Button>
             </StackPanel>
 
-            <Button Grid.Column="1" x:Name="btnSettings" Style="{StaticResource MaterialDesignFloatingActionMiniButton}" Click="btnSettings_Click" Height="40" Width="40" ToolTip="管理视频目录" VerticalAlignment="Center">
-                <materialDesign:PackIcon Kind="Settings" Height="24" Width="24" />
-            </Button>
+            <StackPanel Orientation="Horizontal" Grid.Column="1" VerticalAlignment="Center">
+                <Button Style="{StaticResource MaterialDesignFloatingActionMiniButton}" Command="{Binding RefreshCacheCommand}" Height="40" Width="40" ToolTip="清空海报与简介缓存库 (重置识别)" Margin="0,0,10,0" Background="{DynamicResource PrimaryHueDarkBrush}" BorderBrush="Transparent">
+                    <materialDesign:PackIcon Kind="DatabaseRefresh" Height="24" Width="24" Foreground="White" />
+                </Button>
+                <Button x:Name="btnSettings" Style="{StaticResource MaterialDesignFloatingActionMiniButton}" Click="btnSettings_Click" Height="40" Width="40" ToolTip="管理视频目录">
+                    <materialDesign:PackIcon Kind="Settings" Height="24" Width="24" />
+                </Button>
+            </StackPanel>
         </Grid>
 
         <!-- Main DataGrid -->
-        <DataGrid Grid.Row="1" x:Name="outputGrid" Style="{StaticResource MaterialDesignDataGrid}" ItemsSource="{Binding VideoItems}" Margin="16,0,16,0" AutoGenerateColumns="False" SelectionMode="Single" SelectionUnit="FullRow" IsReadOnly="true" VirtualizingPanel.IsVirtualizing="True">
+        <DataGrid Grid.Row="1" x:Name="outputGrid" SelectedItem="{Binding SelectedVideo}" Style="{StaticResource MaterialDesignDataGrid}" ItemsSource="{Binding VideoItems}" Margin="16,0,16,16" AutoGenerateColumns="False" SelectionMode="Single" SelectionUnit="FullRow" IsReadOnly="true" VirtualizingPanel.IsVirtualizing="True">
             <DataGrid.CellStyle>
                 <Style TargetType="DataGridCell" BasedOn="{StaticResource MaterialDesignDataGridCell}">
                     <Setter Property="FocusVisualStyle" Value="{x:Null}" />
@@ -70,8 +76,31 @@
                 </Style>
             </DataGrid.RowStyle>
             <DataGrid.Columns>
+                <DataGridTemplateColumn Width="85">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" Visibility="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=DataGridRow}, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <Button Style="{StaticResource MaterialDesignIconButton}" 
+                                        Command="{Binding DataContext.OpenMediaCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}" 
+                                        CommandParameter="{Binding}" 
+                                        Width="30" Height="30" Padding="0" Margin="0,0,5,0"
+                                        Foreground="{DynamicResource PrimaryHueMidBrush}"
+                                        ToolTip="播放该视频">
+                                    <materialDesign:PackIcon Kind="Play" Width="20" Height="20" />
+                                </Button>
+                                <Button Style="{StaticResource MaterialDesignIconButton}" 
+                                        Command="{Binding DataContext.OpenContainingFolderCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}" 
+                                        CommandParameter="{Binding}" 
+                                        Width="30" Height="30" Padding="0" Margin="0"
+                                        Foreground="{DynamicResource SecondaryHueMidBrush}"
+                                        ToolTip="打开所在文件夹">
+                                    <materialDesign:PackIcon Kind="FolderOpen" Width="20" Height="20" />
+                                </Button>
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
                 <DataGridTextColumn Header="编号" Binding="{Binding Id}" />
-                <DataGridTextColumn Header="录入日期" Binding="{Binding CreationTime, StringFormat=\{0:yyyy-MM-dd HH:mm\}}" />
                 <DataGridTextColumn Header="路径" Binding="{Binding FolderName}" Width="*" />
                 <DataGridTextColumn Header="文件名" Binding="{Binding FileName}" Width="*" />
             </DataGrid.Columns>
@@ -84,8 +113,49 @@
             </DataGrid.ContextMenu>
         </DataGrid>
 
+        <!-- Metadata Bottom Panel (Cinematic Glassmorphism) -->
+        <Border Grid.Row="2" Margin="16,0,16,10" CornerRadius="8" ClipToBounds="True" Height="200" Visibility="{Binding IsMetadataVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <Grid>
+                <!-- 1. Thematic Background (Heavily Blurred Poster) -->
+                <Image Source="{Binding CurrentMetadata.PosterPath}" Stretch="UniformToFill" Margin="-30" RenderOptions.BitmapScalingMode="LowQuality">
+                    <Image.Effect>
+                        <BlurEffect Radius="60" KernelType="Gaussian" />
+                    </Image.Effect>
+                </Image>
+                
+                <!-- 2. Dark Legibility Gradient Tint -->
+                <Border>
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0.5" EndPoint="1,0.5">
+                            <GradientStop Color="#E6000000" Offset="0" />
+                            <GradientStop Color="#C0000000" Offset="0.8" />
+                            <GradientStop Color="#99000000" Offset="1" />
+                        </LinearGradientBrush>
+                    </Border.Background>
+                </Border>
+
+                <!-- 3. Crisp Foreground Content -->
+                <Grid Margin="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="115" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    
+                    <Border Grid.Column="0" CornerRadius="4" ClipToBounds="True">
+                        <Image Source="{Binding CurrentMetadata.PosterPath}" Stretch="UniformToFill" />
+                    </Border>
+                    
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="20,0,10,0">
+                        <TextBlock Text="{Binding CurrentMetadata.Title}" FontSize="26" FontWeight="Bold" Foreground="White" Margin="0,0,0,6" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding CurrentMetadata.Genre}" FontSize="13" Foreground="#B3FFFFFF" Margin="0,0,0,10" />
+                        <TextBlock Text="{Binding CurrentMetadata.Plot}" FontSize="14" Foreground="#E6FFFFFF" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="85" LineHeight="20" />
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </Border>
+
         <!-- Status Bar -->
-        <StatusBar Grid.Row="2" Margin="0,5,0,0">
+        <StatusBar Grid.Row="3" Margin="0,5,0,0">
             <StatusBarItem>
                 <TextBlock x:Name="totalItemsText" Text="{Binding TotalItemsText}"/>
             </StatusBarItem>
@@ -95,7 +165,7 @@
         </StatusBar>
 
         <!-- Loading Overlay -->
-        <Grid Grid.RowSpan="3" x:Name="LoadingOverlay" Background="#99000000" Panel.ZIndex="100" Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}">
+        <Grid Grid.RowSpan="4" x:Name="LoadingOverlay" Background="#99000000" Panel.ZIndex="100" Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}">
             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                 <ProgressBar Style="{StaticResource MaterialDesignCircularProgressBar}" Value="0" IsIndeterminate="True" Width="50" Height="50" Margin="0,0,0,16" Foreground="White" />
                 <TextBlock Text="正在加载文件，请稍候..." Foreground="White" FontSize="20"/>

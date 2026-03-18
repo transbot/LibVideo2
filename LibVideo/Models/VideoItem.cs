@@ -11,6 +11,12 @@ namespace LibVideo.Models
         public string FullName { get; set; }
         public DateTime CreationTime { get; set; }
 
+        public string MetaTitle { get; set; }
+        public string MetaPlot { get; set; }
+        public string MetaGenre { get; set; }
+        public string MetaPosterPath { get; set; }
+        public bool HasScraped { get; set; }
+
         public VideoItem()
         {
             CreationTime = DateTime.Now;

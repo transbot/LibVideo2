@@ -125,6 +125,7 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="Models\VideoItem.cs" />
+    <Compile Include="Models\MetadataService.cs" />
     <Compile Include="ViewModels\MainViewModel.cs" />
     <Compile Include="Data\DatabaseManager.cs" />
   </ItemGroup>

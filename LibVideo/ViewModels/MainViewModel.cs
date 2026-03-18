@@ -11,6 +11,7 @@ using CommunityToolkit.Mvvm.Input;
 using LibVideo.Models;
 using LibVideo.Data;
 using Microsoft.Win32;
+using System.Windows.Input;
 
 namespace LibVideo.ViewModels
 {
@@ -34,8 +35,11 @@ namespace LibVideo.ViewModels
             NextSearchCommand = new RelayCommand(NextSearch);
             OpenMediaCommand = new RelayCommand<VideoItem>(OpenMedia);
             OpenContainingFolderCommand = new RelayCommand<VideoItem>(OpenContainingFolder);
+            SelectPlayerCommand = new RelayCommand(SelectPlayer);
+            RefreshCacheCommand = new AsyncRelayCommand(RefreshCacheAsync);
 
             LoadDirectories();
+            if (File.Exists("player.txt")) customPlayerPath = File.ReadAllText("player.txt");
             _ = InitializeDataAsync();
         }
 
@@ -46,14 +50,37 @@ namespace LibVideo.ViewModels
             set => SetProperty(ref isLoading, value);
         }
 
+        private string maxTypedKeyword = "";
         private string searchKeyword = "";
         public string SearchKeyword
         {
             get => searchKeyword;
             set
             {
-                SetProperty(ref searchKeyword, value);
-                FilterItems();
+                if (SetProperty(ref searchKeyword, value))
+                {
+                    bool isDeleting = Keyboard.IsKeyDown(Key.Back) || Keyboard.IsKeyDown(Key.Delete);
+                    
+                    if (isDeleting)
+                    {
+                        // 用户主动执行了清除/退格，立即丢弃所有的记录准备（不要缓存残缺片段）
+                        maxTypedKeyword = "";
+                    }
+                    else if (!string.IsNullOrEmpty(value))
+                    {
+                        if (value.Length >= maxTypedKeyword.Length || !value.StartsWith(maxTypedKeyword, StringComparison.OrdinalIgnoreCase))
+                        {
+                            maxTypedKeyword = value;
+                        }
+                    }
+                    else if (string.IsNullOrEmpty(value) && !string.IsNullOrWhiteSpace(maxTypedKeyword))
+                    {
+                        // 点击X按钮（值变空且不是通过退格/Delete发生）
+                        CommitSearchText(maxTypedKeyword);
+                        maxTypedKeyword = "";
+                    }
+                    FilterItems();
+                }
             }
         }
 
@@ -78,6 +105,88 @@ namespace LibVideo.ViewModels
             set => SetProperty(ref selectedDirectory, value);
         }
 
+        private string customPlayerPath;
+        public string CustomPlayerPath
+        {
+            get => customPlayerPath;
+            set 
+            {
+                if (SetProperty(ref customPlayerPath, value))
+                {
+                    File.WriteAllText("player.txt", value ?? "");
+                }
+            }
+        }
+
+        private VideoMetadata currentMetadata;
+        public VideoMetadata CurrentMetadata
+        {
+            get => currentMetadata;
+            set
+            {
+                SetProperty(ref currentMetadata, value);
+                OnPropertyChanged(nameof(IsMetadataVisible));
+            }
+        }
+        public bool IsMetadataVisible => CurrentMetadata != null;
+
+        private VideoItem selectedVideo;
+        public VideoItem SelectedVideo
+        {
+            get => selectedVideo;
+            set
+            {
+                if (SetProperty(ref selectedVideo, value))
+                {
+                    if (value != null)
+                        LoadMetadata(value.FullName);
+                    else
+                        CurrentMetadata = null;
+                }
+            }
+        }
+
+        private async void LoadMetadata(string path)
+        {
+            var item = _allDatabaseItems.FirstOrDefault(v => v.FullName == path);
+            if (item != null && item.HasScraped)
+            {
+                if (!string.IsNullOrEmpty(item.MetaTitle) || !string.IsNullOrEmpty(item.MetaPlot))
+                {
+                    CurrentMetadata = new VideoMetadata
+                    {
+                        Title = item.MetaTitle,
+                        Plot = item.MetaPlot,
+                        Genre = item.MetaGenre,
+                        PosterPath = item.MetaPosterPath
+                    };
+                }
+                else
+                {
+                    CurrentMetadata = null;
+                }
+                return;
+            }
+
+            var fetchedMeta = await MetadataService.GetMetadataAsync(path);
+            CurrentMetadata = fetchedMeta;
+
+            if (item != null)
+            {
+                if (fetchedMeta != null)
+                {
+                    item.MetaTitle = fetchedMeta.Title;
+                    item.MetaPlot = fetchedMeta.Plot;
+                    item.MetaGenre = fetchedMeta.Genre;
+                    item.MetaPosterPath = fetchedMeta.PosterPath;
+                }
+                item.HasScraped = true;
+                
+                // Fire-and-forget DB update in background thread
+                _ = Task.Run(() => _dbManager.UpdateItemMetadata(item));
+            }
+        }
+
         public ObservableCollection<string> Directories { get; }
         public ObservableCollection<VideoItem> VideoItems { get; }
         public ObservableCollection<string> SearchHistory { get; }
@@ -89,6 +198,8 @@ namespace LibVideo.ViewModels
         public IRelayCommand NextSearchCommand { get; }
         public IRelayCommand<VideoItem> OpenMediaCommand { get; }
         public IRelayCommand<VideoItem> OpenContainingFolderCommand { get; }
+        public IRelayCommand SelectPlayerCommand { get; }
+        public IAsyncRelayCommand RefreshCacheCommand { get; }
 
         private List<VideoItem> _allDatabaseItems = new List<VideoItem>();
         private int searchHistoryIndex = -1;
@@ -125,6 +236,20 @@ namespace LibVideo.ViewModels
                 Directories.Remove(SelectedDirectory);
                 SaveDirectories();
                 await LoadFromDatabaseAsync();
+            }
+        }
+
+        private async Task RefreshCacheAsync()
+        {
+            if (MessageBox.Show("确定要清空所有已脱机保存的海报与文本缓存，并重新全盘同步吗？\n（您添加的目录将会被完好保留）", "清空元数据缓存", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
+            {
+                IsLoading = true;
+                // Delete everything in LiteDB "videos" collection
+                await Task.Run(() => _dbManager.ClearItems());
+                CurrentMetadata = null;
+                // Re-scan from the existing directories
+                await RefreshFromDiskAsync();
+                IsLoading = false;
             }
         }
 
@@ -197,44 +322,63 @@ namespace LibVideo.ViewModels
             });
         }
         
-        private void CommitSearch()
+        private void CommitSearchText(string text)
         {
-            string text = SearchKeyword?.Trim() ?? "";
+            text = text?.Trim() ?? "";
             if (!string.IsNullOrEmpty(text))
             {
-                if (SearchHistory.Count == 0 || SearchHistory.Last() != text)
+                // 深度清除所有的重复项（极其严谨地预防任何冗余残留）
+                var existingItems = SearchHistory.Where(s => s.Equals(text, StringComparison.OrdinalIgnoreCase)).ToList();
+                foreach (var item in existingItems)
                 {
-                    SearchHistory.Add(text);
-                    if (SearchHistory.Count > 5)
-                    {
-                        SearchHistory.RemoveAt(0);
-                    }
+                    SearchHistory.Remove(item);
                 }
-                searchHistoryIndex = SearchHistory.Count;
+                
+                // 置顶最新搜索结果
+                SearchHistory.Insert(0, text);
+                
+                if (SearchHistory.Count > 10)
+                {
+                    SearchHistory.RemoveAt(SearchHistory.Count - 1);
+                }
+                searchHistoryIndex = -1; // -1表示未在历史记录中选中任何一项
             }
+        }
+
+        private void CommitSearch()
+        {
+            CommitSearchText(SearchKeyword);
+            maxTypedKeyword = SearchKeyword ?? "";
             FilterItems();
         }
 
         private void PrevSearch()
         {
-            if (SearchHistory.Count > 0 && searchHistoryIndex > 0)
+            if (SearchHistory.Count > 0)
             {
-                searchHistoryIndex--;
-                SearchKeyword = SearchHistory[searchHistoryIndex];
+                if (searchHistoryIndex < SearchHistory.Count - 1)
+                {
+                    searchHistoryIndex++;
+                    // 为了防止触发setter中的重置逻辑，先临时关闭历史记录指针或直接赋予
+                    SearchKeyword = SearchHistory[searchHistoryIndex];
+                }
             }
         }
 
         private void NextSearch()
         {
-            if (SearchHistory.Count > 0 && searchHistoryIndex < SearchHistory.Count - 1)
+            if (SearchHistory.Count > 0)
             {
-                searchHistoryIndex++;
-                SearchKeyword = SearchHistory[searchHistoryIndex];
-            }
-            else if (SearchHistory.Count > 0 && searchHistoryIndex == SearchHistory.Count - 1)
-            {
-                searchHistoryIndex++;
-                SearchKeyword = "";
+                if (searchHistoryIndex > 0)
+                {
+                    searchHistoryIndex--;
+                    SearchKeyword = SearchHistory[searchHistoryIndex];
+                }
+                else if (searchHistoryIndex == 0)
+                {
+                    searchHistoryIndex = -1;
+                    SearchKeyword = "";
+                }
             }
         }
 
@@ -243,10 +387,20 @@ namespace LibVideo.ViewModels
             TotalItemsText = $"媒体文件或文件夹共计: {_allDatabaseItems.Count} 个";
         }
 
+        private void SelectPlayer()
+        {
+            var dlg = new OpenFileDialog { Filter = "Executable Files (*.exe)|*.exe", Title = "选择自定义播放器" };
+            if (dlg.ShowDialog() == true)
+            {
+                CustomPlayerPath = dlg.FileName;
+            }
+        }
+
         private void OpenMedia(VideoItem item)
         {
             if (item == null) return;
             string filePath = item.FullName;
+            string executable = !string.IsNullOrEmpty(CustomPlayerPath) && File.Exists(CustomPlayerPath) ? CustomPlayerPath : potplayerPath;
             
             if (IsIsoFile(filePath) || ContainsIsoFile(filePath))
             {
@@ -258,8 +412,8 @@ namespace LibVideo.ViewModels
 
                 if (!string.IsNullOrEmpty(isoFilePath))
                 {
-                    if (potplayerPath != null)
-                        Process.Start(potplayerPath, isoFilePath);
+                    if (executable != null)
+                        Process.Start(executable, $"\"{isoFilePath}\"");
                     else
                         Process.Start(new ProcessStartInfo(isoFilePath) { UseShellExecute = true });
                 }
@@ -270,8 +424,8 @@ namespace LibVideo.ViewModels
             }
             else if (File.Exists(filePath) || Directory.Exists(filePath))
             {
-                if (potplayerPath != null && !IsIsoFile(filePath))
-                    Process.Start(potplayerPath, filePath);
+                if (executable != null && !IsIsoFile(filePath))
+                    Process.Start(executable, $"\"{filePath}\"");
                 else
                     Process.Start(new ProcessStartInfo(filePath) { UseShellExecute = true });
             }

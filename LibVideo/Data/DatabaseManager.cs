@@ -60,5 +60,23 @@ namespace LibVideo.Data
                 }
             }
         }
+
+        public void UpdateItemMetadata(VideoItem memItem)
+        {
+            using (var db = new LiteDatabase(dbPath))
+            {
+                var col = db.GetCollection<VideoItem>("videos");
+                var dbItem = col.FindOne(x => x.FullName == memItem.FullName);
+                if (dbItem != null)
+                {
+                    dbItem.MetaTitle = memItem.MetaTitle;
+                    dbItem.MetaPlot = memItem.MetaPlot;
+                    dbItem.MetaGenre = memItem.MetaGenre;
+                    dbItem.MetaPosterPath = memItem.MetaPosterPath;
+                    dbItem.HasScraped = memItem.HasScraped;
+                    col.Update(dbItem);
+                }
+            }
+        }
     }
 }

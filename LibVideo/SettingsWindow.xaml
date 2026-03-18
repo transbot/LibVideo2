@@ -12,6 +12,9 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
         
         <TextBlock Text="配置您的视频扫描目录：" FontSize="16" FontWeight="Bold" Margin="0,0,0,10" />
@@ -24,5 +27,17 @@
             <Button Content="添加视频目录" Style="{StaticResource MaterialDesignRaisedButton}" Click="AddDir_Click" Margin="0,0,10,0" />
             <Button Content="删除选中" Style="{StaticResource MaterialDesignOutlinedButton}" Command="{Binding DeleteSelectedDirectoryCommand}" Foreground="#c62828" BorderBrush="#c62828" />
         </StackPanel>
+        
+        <Separator Grid.Row="3" Margin="0,16,0,16" />
+        
+        <TextBlock Grid.Row="4" Text="自定义播放器：" FontSize="16" FontWeight="Bold" Margin="0,0,0,10" />
+        <Grid Grid.Row="5" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox Text="{Binding CustomPlayerPath, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource MaterialDesignFloatingHintTextBox}" materialDesign:HintAssist.Hint="在此填写或浏览播放器完整路径（若留空则自动检测 PotPlayer）" Height="45" Margin="0,0,10,0" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Content="浏览件" Style="{StaticResource MaterialDesignOutlinedButton}" Command="{Binding SelectPlayerCommand}" Width="70" VerticalAlignment="Center" />
+        </Grid>
     </Grid>
 </Window>
