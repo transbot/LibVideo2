@@ -16,6 +16,19 @@ namespace LibVideo
                 string lang = File.ReadAllText("language.txt").Trim();
                 ChangeLanguage(lang);
             }
+            else
+            {
+                // First-time launch: check system locale
+                if (!System.Threading.Thread.CurrentThread.CurrentUICulture.Name.StartsWith("zh", StringComparison.OrdinalIgnoreCase))
+                {
+                    ChangeLanguage("en");
+                    File.WriteAllText("language.txt", "en");
+                }
+                else
+                {
+                    File.WriteAllText("language.txt", "zh");
+                }
+            }
             
             AppDomain.CurrentDomain.UnhandledException += (s, args) => 
                 LogException(args.ExceptionObject as Exception);

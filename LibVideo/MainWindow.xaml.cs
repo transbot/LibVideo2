@@ -56,5 +56,12 @@ namespace LibVideo
             settingsWin.DataContext = this.DataContext;
             settingsWin.ShowDialog();
         }
+
+        private void btnAbout_Click(object sender, RoutedEventArgs e)
+        {
+            var aboutWin = new AboutWindow();
+            aboutWin.Owner = this;
+            aboutWin.ShowDialog();
+        }
     }
 }

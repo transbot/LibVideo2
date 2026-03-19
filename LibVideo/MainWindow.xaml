@@ -53,6 +53,9 @@
             </StackPanel>
 
             <StackPanel Orientation="Horizontal" Grid.Column="1" VerticalAlignment="Center">
+                <Button x:Name="btnAbout" Style="{StaticResource MaterialDesignFloatingActionMiniButton}" Click="btnAbout_Click" Height="40" Width="40" ToolTip="{DynamicResource AboutToolTip}" Margin="0,0,10,0" Background="{DynamicResource PrimaryHueMidBrush}" BorderBrush="Transparent">
+                    <materialDesign:PackIcon Kind="InformationOutline" Height="24" Width="24" Foreground="White" />
+                </Button>
                 <Button Style="{StaticResource MaterialDesignFloatingActionMiniButton}" Command="{Binding RefreshCacheCommand}" Height="40" Width="40" ToolTip="{DynamicResource RefreshCacheToolTip}" Margin="0,0,10,0" Background="{DynamicResource PrimaryHueDarkBrush}" BorderBrush="Transparent">
                     <materialDesign:PackIcon Kind="DatabaseRefresh" Height="24" Width="24" Foreground="White" />
                 </Button>
@@ -100,9 +103,27 @@
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
-                <DataGridTextColumn Header="{DynamicResource HeaderId}" Binding="{Binding Id}" />
-                <DataGridTextColumn Header="{DynamicResource HeaderPath}" Binding="{Binding FolderName}" Width="*" />
-                <DataGridTextColumn Header="{DynamicResource HeaderFileName}" Binding="{Binding FileName}" Width="*" />
+                <DataGridTextColumn Binding="{Binding Id}">
+                    <DataGridTextColumn.HeaderTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{DynamicResource HeaderId}" />
+                        </DataTemplate>
+                    </DataGridTextColumn.HeaderTemplate>
+                </DataGridTextColumn>
+                <DataGridTextColumn Binding="{Binding FolderName}" Width="*">
+                    <DataGridTextColumn.HeaderTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{DynamicResource HeaderPath}" />
+                        </DataTemplate>
+                    </DataGridTextColumn.HeaderTemplate>
+                </DataGridTextColumn>
+                <DataGridTextColumn Binding="{Binding FileName}" Width="*">
+                    <DataGridTextColumn.HeaderTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{DynamicResource HeaderFileName}" />
+                        </DataTemplate>
+                    </DataGridTextColumn.HeaderTemplate>
+                </DataGridTextColumn>
             </DataGrid.Columns>
 
             <DataGrid.ContextMenu>

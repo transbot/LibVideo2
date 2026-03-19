@@ -11,6 +11,9 @@
     <system:String x:Key="BrowseButton">浏览</system:String>
     <system:String x:Key="UILanguageLabel">界面语言：</system:String>
     <system:String x:Key="OKButton">确定</system:String>
+    <system:String x:Key="AboutWindowTitle">关于 LibVideo</system:String>
+    <system:String x:Key="AboutDescription">LibVideo 是一款本地影视及音乐库管理工具，为您提供无缝的沉浸式选片体验。</system:String>
+    <system:String x:Key="AboutToolTip">关于 / 作者主页</system:String>
 
     <!-- MainWindow Strings -->
     <system:String x:Key="MainWindowTitle">我家视频</system:String>

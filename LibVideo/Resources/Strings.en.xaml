@@ -11,6 +11,9 @@
     <system:String x:Key="BrowseButton">Browse</system:String>
     <system:String x:Key="UILanguageLabel">UI Language:</system:String>
     <system:String x:Key="OKButton">OK</system:String>
+    <system:String x:Key="AboutWindowTitle">About LibVideo</system:String>
+    <system:String x:Key="AboutDescription">LibVideo is a local video and music library management tool that provides a seamless, immersive media selection experience.</system:String>
+    <system:String x:Key="AboutToolTip">About / Author Info</system:String>
 
     <!-- MainWindow Strings -->
     <system:String x:Key="MainWindowTitle">My Videos</system:String>
