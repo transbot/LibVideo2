@@ -16,9 +16,13 @@ namespace LibVideo
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
-            System.Windows.Media.ImageBrush myBrush = new System.Windows.Media.ImageBrush();
-            myBrush.ImageSource = new System.Windows.Media.Imaging.BitmapImage(new System.Uri("pack://application:,,,/background.jpg", System.UriKind.Absolute));
-            this.Background = myBrush;
+            try
+            {
+                System.Windows.Media.ImageBrush myBrush = new System.Windows.Media.ImageBrush();
+                myBrush.ImageSource = new System.Windows.Media.Imaging.BitmapImage(new System.Uri("pack://application:,,,/background.jpg", System.UriKind.Absolute));
+                this.Background = myBrush;
+            }
+            catch { }
         }
 
         private void Row_DoubleClick(object sender, MouseButtonEventArgs e)

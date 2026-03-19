@@ -1,0 +1,40 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:system="clr-namespace:System;assembly=mscorlib">
+    <!-- Settings Strings -->
+    <system:String x:Key="SettingsWindowTitle">Settings</system:String>
+    <system:String x:Key="ScanDirectoryLabel">Configure your video scan directories:</system:String>
+    <system:String x:Key="AddVideoDirectory">Add Directory</system:String>
+    <system:String x:Key="DeleteSelected">Delete Selected</system:String>
+    <system:String x:Key="CustomPlayerLabel">Custom Player:</system:String>
+    <system:String x:Key="CustomPlayerHint">Enter or browse player path (PotPlayer auto-detected if empty)</system:String>
+    <system:String x:Key="BrowseButton">Browse</system:String>
+    <system:String x:Key="UILanguageLabel">UI Language:</system:String>
+    <system:String x:Key="OKButton">OK</system:String>
+
+    <!-- MainWindow Strings -->
+    <system:String x:Key="MainWindowTitle">My Videos</system:String>
+    <system:String x:Key="SearchHint">Search video files...</system:String>
+    <system:String x:Key="PrevSearchToolTip">Previous search</system:String>
+    <system:String x:Key="NextSearchToolTip">Next search</system:String>
+    <system:String x:Key="RefreshCacheToolTip">Clear metadata cache (refresh scan)</system:String>
+    <system:String x:Key="SettingsToolTip">Settings &amp; Directories</system:String>
+    <system:String x:Key="PlayVideoToolTip">Play video</system:String>
+    <system:String x:Key="OpenFolderToolTip">Open containing folder</system:String>
+    <system:String x:Key="HeaderId">ID</system:String>
+    <system:String x:Key="HeaderPath">Path</system:String>
+    <system:String x:Key="HeaderFileName">Filename</system:String>
+    <system:String x:Key="MenuPlay">Play</system:String>
+    <system:String x:Key="MenuOpenFolder">Open Folder</system:String>
+    <system:String x:Key="LoadingText">Loading files, please wait...</system:String>
+
+    <!-- Dialog Strings -->
+    <system:String x:Key="DialogRefreshCacheMsg">Are you sure you want to clear all metadata cache and resync?&#x0a;(Your configured directories will be preserved)</system:String>
+    <system:String x:Key="DialogRefreshCacheTitle">Clear Metadata Cache</system:String>
+    <system:String x:Key="DialogNoIsoFound">No ISO file found in the specified directory.</system:String>
+    <system:String x:Key="DialogErrorTitle">Error</system:String>
+    <system:String x:Key="DialogPathInvalid">The file path does not exist or is not valid.</system:String>
+
+    <!-- StatusBar Strings -->
+    <system:String x:Key="StatusTotalItems">Total media items/folders: {0}</system:String>
+</ResourceDictionary>

@@ -289,13 +289,14 @@ namespace LibVideo.ViewModels
 
         private async Task RefreshCacheAsync()
         {
-            if (MessageBox.Show("确定要清空所有已脱机保存的海报与文本缓存，并重新全盘同步吗？\n（您添加的目录将会被完好保留）", "清空元数据缓存", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
+            string msg = Application.Current.TryFindResource("DialogRefreshCacheMsg") as string ?? "Clear all cache?";
+            string title = Application.Current.TryFindResource("DialogRefreshCacheTitle") as string ?? "Clear Cache";
+            
+            if (MessageBox.Show(msg, title, MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
             {
                 IsLoading = true;
-                // Delete everything in LiteDB "videos" collection
                 await Task.Run(() => _dbManager.ClearItems());
                 CurrentMetadata = null;
-                // Re-scan from the existing directories
                 await RefreshFromDiskAsync();
                 IsLoading = false;
             }
@@ -437,7 +438,8 @@ namespace LibVideo.ViewModels
 
         private void UpdateStatusBar()
         {
-            TotalItemsText = $"媒体文件或文件夹共计: {_allDatabaseItems.Count} 个";
+            string fmt = Application.Current.TryFindResource("StatusTotalItems") as string ?? "Total items: {0}";
+            TotalItemsText = string.Format(fmt, _allDatabaseItems.Count);
         }
 
         private void SelectPlayer()
@@ -472,7 +474,9 @@ namespace LibVideo.ViewModels
                 }
                 else
                 {
-                    MessageBox.Show("No ISO file found in the specified directory.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    string msg = Application.Current.TryFindResource("DialogNoIsoFound") as string ?? "No ISO file found in directory.";
+                    string title = Application.Current.TryFindResource("DialogErrorTitle") as string ?? "Error";
+                    MessageBox.Show(msg, title, MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
             else if (File.Exists(filePath) || Directory.Exists(filePath))
@@ -484,7 +488,9 @@ namespace LibVideo.ViewModels
             }
             else
             {
-                MessageBox.Show("The file path does not exist or is not valid.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                string msg = Application.Current.TryFindResource("DialogPathInvalid") as string ?? "Path invalid.";
+                string title = Application.Current.TryFindResource("DialogErrorTitle") as string ?? "Error";
+                MessageBox.Show(msg, title, MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -498,7 +504,11 @@ namespace LibVideo.ViewModels
             else if (Directory.Exists(filePath))
                 Process.Start("explorer.exe", $"\"{filePath}\"");
             else
-                MessageBox.Show("指定的文件或目录不存在。", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            {
+                string msg = Application.Current.TryFindResource("DialogPathInvalid") as string ?? "Path invalid.";
+                string title = Application.Current.TryFindResource("DialogErrorTitle") as string ?? "Error";
+                MessageBox.Show(msg, title, MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         private bool IsIsoFile(string filePath) => Path.GetExtension(filePath).Equals(".iso", StringComparison.OrdinalIgnoreCase);

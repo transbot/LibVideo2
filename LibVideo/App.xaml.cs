@@ -11,6 +11,12 @@ namespace LibVideo
         {
             base.OnStartup(e);
             
+            if (File.Exists("language.txt"))
+            {
+                string lang = File.ReadAllText("language.txt").Trim();
+                ChangeLanguage(lang);
+            }
+            
             AppDomain.CurrentDomain.UnhandledException += (s, args) => 
                 LogException(args.ExceptionObject as Exception);
             
@@ -33,6 +39,40 @@ namespace LibVideo
                 File.AppendAllText("crash.log", $"[{DateTime.Now}] {ex.ToString()}\n\n");
             }
             catch { }
+        }
+
+        public static void ChangeLanguage(string langCode)
+        {
+            var dictionary = new ResourceDictionary();
+            if (langCode == "en")
+            {
+                dictionary.Source = new System.Uri("Resources/Strings.en.xaml", System.UriKind.Relative);
+            }
+            else
+            {
+                dictionary.Source = new System.Uri("Resources/Strings.xaml", System.UriKind.Relative);
+            }
+
+            var mergedDicts = Application.Current.Resources.MergedDictionaries;
+            ResourceDictionary oldDict = null;
+            foreach (var dict in mergedDicts)
+            {
+                if (dict.Source != null && dict.Source.OriginalString.Contains("Strings"))
+                {
+                    oldDict = dict;
+                    break;
+                }
+            }
+
+            if (oldDict != null)
+            {
+                mergedDicts.Remove(oldDict);
+                mergedDicts.Add(dictionary);
+            }
+            else
+            {
+                mergedDicts.Add(dictionary); // If it wasn't pre-loaded in App.xaml during some race conditions
+            }
         }
     }
 }
