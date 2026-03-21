@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Windows;
 using System.Threading.Tasks;
+using LibVideo.Helpers;
 
 namespace LibVideo
 {
@@ -11,9 +12,9 @@ namespace LibVideo
         {
             base.OnStartup(e);
             
-            if (File.Exists("language.txt"))
+            if (File.Exists(AppPaths.LanguageFile))
             {
-                string lang = File.ReadAllText("language.txt").Trim();
+                string lang = File.ReadAllText(AppPaths.LanguageFile).Trim();
                 ChangeLanguage(lang);
             }
             else
@@ -22,11 +23,11 @@ namespace LibVideo
                 if (!System.Threading.Thread.CurrentThread.CurrentUICulture.Name.StartsWith("zh", StringComparison.OrdinalIgnoreCase))
                 {
                     ChangeLanguage("en");
-                    File.WriteAllText("language.txt", "en");
+                    File.WriteAllText(AppPaths.LanguageFile, "en");
                 }
                 else
                 {
-                    File.WriteAllText("language.txt", "zh");
+                    File.WriteAllText(AppPaths.LanguageFile, "zh");
                 }
             }
             

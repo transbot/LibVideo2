@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using LiteDB;
 using LibVideo.Models;
+using LibVideo.Helpers;
 
 namespace LibVideo.Data
 {
@@ -9,14 +10,14 @@ namespace LibVideo.Data
     {
         private readonly string dbPath;
 
-        public DatabaseManager(string path = "libvideo_db.db")
+        public DatabaseManager()
         {
-            dbPath = path;
+            dbPath = AppPaths.DatabaseFile;
         }
 
         public void SyncDiskItems(IEnumerable<VideoItem> currentFilesList, HashSet<string> scannedRoots)
         {
-            using (var db = new LiteDatabase(dbPath))
+            using (var db = new LiteDatabase($"Filename={dbPath};Connection=Shared"))
             {
                 var col = db.GetCollection<VideoItem>("videos");
                 col.EnsureIndex(x => x.FullName, true);
@@ -88,6 +89,7 @@ namespace LibVideo.Data
                     dbItem.MetaPlot = memItem.MetaPlot;
                     dbItem.MetaGenre = memItem.MetaGenre;
                     dbItem.MetaPosterPath = memItem.MetaPosterPath;
+                    dbItem.MetaRating = memItem.MetaRating;
                     dbItem.HasScraped = memItem.HasScraped;
                     col.Update(dbItem);
                 }

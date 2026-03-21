@@ -103,6 +103,7 @@
     <Reference Include="WindowsBase" />
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
+    <Reference Include="System.Web.Extensions" />
   </ItemGroup>
   <ItemGroup>
     <ApplicationDefinition Include="App.xaml">
@@ -149,6 +150,9 @@
     <Compile Include="Models\MetadataService.cs" />
     <Compile Include="ViewModels\MainViewModel.cs" />
     <Compile Include="Data\DatabaseManager.cs" />
+    <Compile Include="Helpers\AppPaths.cs" />
+    <Compile Include="Helpers\MediaExtensions.cs" />
+    <Compile Include="Helpers\PinyinHelper.cs" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Properties\AssemblyInfo.cs">
@@ -192,6 +196,7 @@
     </BootstrapperPackage>
   </ItemGroup>
   <ItemGroup>
+    <Folder Include="Helpers\" />
     <Folder Include="Resources\" />
   </ItemGroup>
   <ItemGroup>

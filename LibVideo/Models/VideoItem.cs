@@ -15,6 +15,7 @@ namespace LibVideo.Models
         public string MetaPlot { get; set; }
         public string MetaGenre { get; set; }
         public string MetaPosterPath { get; set; }
+        public double MetaRating { get; set; }
         public bool HasScraped { get; set; }
 
         public VideoItem()

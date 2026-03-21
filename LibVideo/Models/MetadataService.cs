@@ -1,11 +1,14 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using System.Web.Script.Serialization;
 using System.Xml.Linq;
+using LibVideo.Helpers;
 
 namespace LibVideo.Models
 {
@@ -15,18 +18,21 @@ namespace LibVideo.Models
         public string Plot { get; set; }
         public string Genre { get; set; }
         public string PosterPath { get; set; }
+        public double Rating { get; set; }
+        public string RatingDisplay => Rating > 0 ? $"⭐ {Rating:F1}" : "";
     }
 
     public static class MetadataService
     {
         private static readonly string TMDB_API_KEY = "b5355467863d25d8a7c03c204446034c";
         private static readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+        private static readonly JavaScriptSerializer _jsonSerializer = new JavaScriptSerializer();
 
         private static bool IsEnglish()
         {
-            if (File.Exists("language.txt"))
+            if (File.Exists(AppPaths.LanguageFile))
             {
-                string lang = File.ReadAllText("language.txt").Trim();
+                string lang = File.ReadAllText(AppPaths.LanguageFile).Trim();
                 if (lang == "en") return true;
             }
             return false;
@@ -52,14 +58,12 @@ namespace LibVideo.Models
                     var files = Directory.EnumerateFiles(videoFilePath, "*.*", SearchOption.AllDirectories);
                     bool hasAudio = false;
                     bool hasVideo = false;
-                    string[] audioExts = { ".mp3", ".flac", ".wav", ".ape", ".m4a", ".aac", ".wma", ".ogg", ".mid" };
-                    string[] videoExts = { ".mp4", ".mkv", ".avi", ".rmvb", ".wmv", ".flv", ".mov", ".ts", ".iso", ".m2ts" };
                     
                     foreach (var f in files)
                     {
                         string ext = Path.GetExtension(f).ToLowerInvariant();
-                        if (audioExts.Contains(ext)) hasAudio = true;
-                        if (videoExts.Contains(ext)) hasVideo = true;
+                        if (MediaExtensions.IsAudioFile(ext)) hasAudio = true;
+                        if (MediaExtensions.IsVideoFile(ext)) hasVideo = true;
                         
                         // 发现任何一个视频文件立即阻断扫描
                         if (hasVideo) break;
@@ -71,7 +75,7 @@ namespace LibVideo.Models
             else
             {
                 string extension = Path.GetExtension(videoFilePath).ToLowerInvariant();
-                isAudio = extension == ".mp3" || extension == ".flac" || extension == ".wav" || extension == ".ape" || extension == ".m4a";
+                isAudio = MediaExtensions.IsAudioFile(extension);
             }
 
             if (isAudio)
@@ -196,30 +200,40 @@ namespace LibVideo.Models
                 }
                 
                 string jsonString = await _httpClient.GetStringAsync(url);
-                var resultsMatch = Regex.Match(jsonString, @"""results""\s*:\s*\[(.*?)\]", RegexOptions.Singleline);
-                if (!resultsMatch.Success || string.IsNullOrWhiteSpace(resultsMatch.Groups[1].Value))
-                    return null;
+                var json = _jsonSerializer.Deserialize<Dictionary<string, object>>(jsonString);
                 
-                string firstObjJson = jsonString; 
-                var firstMatch = Regex.Match(resultsMatch.Groups[1].Value, @"\{(.*?)\}", RegexOptions.Singleline);
-                if (firstMatch.Success) firstObjJson = firstMatch.Groups[1].Value;
+                var results = json.ContainsKey("results") ? json["results"] as ArrayList : null;
+                if (results == null || results.Count == 0) return null;
+                
+                var first = results[0] as Dictionary<string, object>;
+                if (first == null) return null;
 
                 var meta = new VideoMetadata();
-                meta.Title = ExtractJsonString(firstObjJson, "title") ?? ExtractJsonString(firstObjJson, "name") ?? query;
+                meta.Title = GetJsonValue(first, "title") ?? GetJsonValue(first, "name") ?? query;
                 
-                string overview = ExtractJsonString(firstObjJson, "overview");
+                string overview = GetJsonValue(first, "overview");
                 meta.Plot = !string.IsNullOrWhiteSpace(overview) ? overview : (isEn ? "No plot overview available." : "该剧集/电影暂无对应的简介。");
                 
-                string posterPath = ExtractJsonString(firstObjJson, "poster_path");
+                string posterPath = GetJsonValue(first, "poster_path");
                 if (!string.IsNullOrEmpty(posterPath))
                 {
                     meta.PosterPath = "https://image.tmdb.org/t/p/w500" + posterPath;
                 }
 
-                var genreIds = ExtractJsonArrayInts(firstObjJson, "genre_ids");
-                if (genreIds.Count > 0)
+                // Extract TMDB rating
+                if (first.ContainsKey("vote_average") && first["vote_average"] != null)
                 {
-                    var genres = genreIds.Select(id => GetTmdbGenre(id, isEn)).Where(g => g != null);
+                    try { meta.Rating = Convert.ToDouble(first["vote_average"]); } catch { }
+                }
+
+                // Extract genre IDs
+                var genreIdsArray = first.ContainsKey("genre_ids") ? first["genre_ids"] as ArrayList : null;
+                if (genreIdsArray != null && genreIdsArray.Count > 0)
+                {
+                    var genres = genreIdsArray
+                        .Cast<object>()
+                        .Select(id => GetTmdbGenre(Convert.ToInt32(id), isEn))
+                        .Where(g => g != null);
                     meta.Genre = string.Join(", ", genres);
                 }
 
@@ -229,33 +243,11 @@ namespace LibVideo.Models
             return null;
         }
 
-        private static string ExtractJsonString(string json, string key)
+        private static string GetJsonValue(Dictionary<string, object> dict, string key)
         {
-            var match = Regex.Match(json, $@"""{key}""\s*:\s*""(.*?)""");
-            if (match.Success)
-            {
-                string val = match.Groups[1].Value;
-                val = val.Replace("\\\"", "\"").Replace("\\/", "/").Replace("\\n", "\n").Replace("\\r", "\r");
-                val = Regex.Replace(val, @"\\u([0-9A-Fa-f]{4})", m => ((char)Convert.ToInt32(m.Groups[1].Value, 16)).ToString());
-                return val;
-            }
+            if (dict.ContainsKey(key) && dict[key] != null)
+                return dict[key].ToString();
             return null;
-        }
-
-        private static List<int> ExtractJsonArrayInts(string json, string key)
-        {
-            var match = Regex.Match(json, $@"""{key}""\s*:\s*\[(.*?)\]");
-            var list = new List<int>();
-            if (match.Success)
-            {
-                var numbers = match.Groups[1].Value.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
-                foreach (var num in numbers)
-                {
-                    if (int.TryParse(num.Trim(), out int val))
-                        list.Add(val);
-                }
-            }
-            return list;
         }
 
         private static string GetTmdbGenre(int id, bool isEn)

@@ -66,7 +66,7 @@
         </Grid>
 
         <!-- Main DataGrid -->
-        <DataGrid Grid.Row="1" x:Name="outputGrid" SelectedItem="{Binding SelectedVideo}" Style="{StaticResource MaterialDesignDataGrid}" ItemsSource="{Binding VideoItems}" Margin="16,0,16,16" AutoGenerateColumns="False" SelectionMode="Single" SelectionUnit="FullRow" IsReadOnly="true" VirtualizingPanel.IsVirtualizing="True">
+        <DataGrid Grid.Row="1" x:Name="outputGrid" SelectedItem="{Binding SelectedVideo}" Style="{StaticResource MaterialDesignDataGrid}" ItemsSource="{Binding VideoItems}" Margin="16,0,16,16" AutoGenerateColumns="False" SelectionMode="Single" SelectionUnit="FullRow" IsReadOnly="true" CanUserSortColumns="True" VirtualizingPanel.IsVirtualizing="True">
             <DataGrid.CellStyle>
                 <Style TargetType="DataGridCell" BasedOn="{StaticResource MaterialDesignDataGridCell}">
                     <Setter Property="FocusVisualStyle" Value="{x:Null}" />
@@ -79,7 +79,7 @@
                 </Style>
             </DataGrid.RowStyle>
             <DataGrid.Columns>
-                <DataGridTemplateColumn Width="85">
+                <DataGridTemplateColumn Width="85" CanUserSort="False">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <StackPanel Orientation="Horizontal" Visibility="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=DataGridRow}, Converter={StaticResource BooleanToVisibilityConverter}}">
@@ -168,7 +168,10 @@
                     
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="20,0,10,0">
                         <TextBlock Text="{Binding CurrentMetadata.Title}" FontSize="26" FontWeight="Bold" Foreground="White" Margin="0,0,0,6" TextWrapping="Wrap" />
-                        <TextBlock Text="{Binding CurrentMetadata.Genre}" FontSize="13" Foreground="#B3FFFFFF" Margin="0,0,0,10" />
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                            <TextBlock Text="{Binding CurrentMetadata.Genre}" FontSize="13" Foreground="#B3FFFFFF" />
+                            <TextBlock Text="{Binding CurrentMetadata.RatingDisplay}" FontSize="13" Foreground="#FFD700" Margin="12,0,0,0" />
+                        </StackPanel>
                         <TextBlock Text="{Binding CurrentMetadata.Plot}" FontSize="14" Foreground="#E6FFFFFF" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="85" LineHeight="20" />
                     </StackPanel>
                 </Grid>

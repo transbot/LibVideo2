@@ -10,6 +10,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using LibVideo.Models;
 using LibVideo.Data;
+using LibVideo.Helpers;
 using Microsoft.Win32;
 using System.Windows.Input;
 
@@ -18,7 +19,6 @@ namespace LibVideo.ViewModels
     public class MainViewModel : ObservableObject
     {
         private readonly DatabaseManager _dbManager;
-        private readonly string configPath = "directories.txt";
         private readonly string potplayerPath = GetPotPlayerPath();
 
         public MainViewModel()
@@ -39,8 +39,9 @@ namespace LibVideo.ViewModels
             RefreshCacheCommand = new AsyncRelayCommand(RefreshCacheAsync);
 
             LoadDirectories();
+            LoadSearchHistory();
             SetupWatchers();
-            if (File.Exists("player.txt")) customPlayerPath = File.ReadAllText("player.txt");
+            if (File.Exists(AppPaths.PlayerFile)) customPlayerPath = File.ReadAllText(AppPaths.PlayerFile);
             _ = InitializeDataAsync();
         }
 
@@ -114,7 +115,7 @@ namespace LibVideo.ViewModels
             {
                 if (SetProperty(ref customPlayerPath, value))
                 {
-                    File.WriteAllText("player.txt", value ?? "");
+                    File.WriteAllText(AppPaths.PlayerFile, value ?? "");
                 }
             }
         }
@@ -140,52 +141,58 @@ namespace LibVideo.ViewModels
                 if (SetProperty(ref selectedVideo, value))
                 {
                     if (value != null)
-                        LoadMetadata(value.FullName);
+                        _ = LoadMetadataAsync(value.FullName);
                     else
                         CurrentMetadata = null;
                 }
             }
         }
 
-        private async void LoadMetadata(string path)
+        private async Task LoadMetadataAsync(string path)
         {
-            var item = _allDatabaseItems.FirstOrDefault(v => v.FullName == path);
-            if (item != null && item.HasScraped)
+            try
             {
-                if (!string.IsNullOrEmpty(item.MetaTitle) || !string.IsNullOrEmpty(item.MetaPlot))
+                var item = _allDatabaseItems.FirstOrDefault(v => v.FullName == path);
+                if (item != null && item.HasScraped)
                 {
-                    CurrentMetadata = new VideoMetadata
+                    if (!string.IsNullOrEmpty(item.MetaTitle) || !string.IsNullOrEmpty(item.MetaPlot))
                     {
-                        Title = item.MetaTitle,
-                        Plot = item.MetaPlot,
-                        Genre = item.MetaGenre,
-                        PosterPath = item.MetaPosterPath
-                    };
+                        CurrentMetadata = new VideoMetadata
+                        {
+                            Title = item.MetaTitle,
+                            Plot = item.MetaPlot,
+                            Genre = item.MetaGenre,
+                            PosterPath = item.MetaPosterPath,
+                            Rating = item.MetaRating
+                        };
+                    }
+                    else
+                    {
+                        CurrentMetadata = null;
+                    }
+                    return;
                 }
-                else
-                {
-                    CurrentMetadata = null;
-                }
-                return;
-            }
 
-            var fetchedMeta = await MetadataService.GetMetadataAsync(path);
-            CurrentMetadata = fetchedMeta;
+                var fetchedMeta = await MetadataService.GetMetadataAsync(path);
+                CurrentMetadata = fetchedMeta;
 
-            if (item != null)
-            {
-                if (fetchedMeta != null)
+                if (item != null)
                 {
-                    item.MetaTitle = fetchedMeta.Title;
-                    item.MetaPlot = fetchedMeta.Plot;
-                    item.MetaGenre = fetchedMeta.Genre;
-                    item.MetaPosterPath = fetchedMeta.PosterPath;
+                    if (fetchedMeta != null)
+                    {
+                        item.MetaTitle = fetchedMeta.Title;
+                        item.MetaPlot = fetchedMeta.Plot;
+                        item.MetaGenre = fetchedMeta.Genre;
+                        item.MetaPosterPath = fetchedMeta.PosterPath;
+                        item.MetaRating = fetchedMeta.Rating;
+                    }
+                    item.HasScraped = true;
+                    
+                    // Fire-and-forget DB update in background thread
+                    _ = Task.Run(() => _dbManager.UpdateItemMetadata(item));
                 }
-                item.HasScraped = true;
-                
-                // Fire-and-forget DB update in background thread
-                _ = Task.Run(() => _dbManager.UpdateItemMetadata(item));
             }
+            catch { }
         }
 
         public ObservableCollection<string> Directories { get; }
@@ -252,16 +259,34 @@ namespace LibVideo.ViewModels
 
         private void LoadDirectories()
         {
-            if (File.Exists(configPath))
+            if (File.Exists(AppPaths.DirectoriesFile))
             {
-                var dirs = File.ReadAllLines(configPath);
+                var dirs = File.ReadAllLines(AppPaths.DirectoriesFile);
                 foreach (var d in dirs) Directories.Add(d);
             }
         }
 
         private void SaveDirectories()
         {
-            File.WriteAllLines(configPath, Directories);
+            File.WriteAllLines(AppPaths.DirectoriesFile, Directories);
+        }
+
+        private void LoadSearchHistory()
+        {
+            if (File.Exists(AppPaths.SearchHistoryFile))
+            {
+                var lines = File.ReadAllLines(AppPaths.SearchHistoryFile);
+                foreach (var line in lines)
+                {
+                    if (!string.IsNullOrWhiteSpace(line))
+                        SearchHistory.Add(line);
+                }
+            }
+        }
+
+        private void SaveSearchHistory()
+        {
+            try { File.WriteAllLines(AppPaths.SearchHistoryFile, SearchHistory); } catch { }
         }
 
         private async Task AddDirectory(string path)
@@ -341,7 +366,7 @@ namespace LibVideo.ViewModels
                         try {
                             foreach (var fi in di.EnumerateFiles("*.*"))
                             {
-                                if (IsMediaFile(fi.Extension))
+                                if (MediaExtensions.IsMediaFile(fi.Extension))
                                     currentFilesList.Add(new VideoItem { FileName = fi.Name, FolderName = fi.DirectoryName, FullName = fi.FullName });
                             }
                             foreach (var sdi in di.EnumerateDirectories())
@@ -362,7 +387,10 @@ namespace LibVideo.ViewModels
             var filter = SearchKeyword?.ToLower() ?? "";
             var filtered = string.IsNullOrEmpty(filter) ? 
                 _allDatabaseItems : 
-                _allDatabaseItems.Where(i => i.FileName.ToLower().Contains(filter)).ToList();
+                _allDatabaseItems.Where(i => 
+                    i.FileName.ToLower().Contains(filter) || 
+                    PinyinHelper.GetInitials(i.FileName).ToLower().Contains(filter)
+                ).ToList();
 
             Application.Current.Dispatcher.Invoke(() =>
             {
@@ -396,6 +424,7 @@ namespace LibVideo.ViewModels
                     SearchHistory.RemoveAt(SearchHistory.Count - 1);
                 }
                 searchHistoryIndex = -1; // -1表示未在历史记录中选中任何一项
+                SaveSearchHistory();
             }
         }
 
@@ -514,12 +543,6 @@ namespace LibVideo.ViewModels
         private bool IsIsoFile(string filePath) => Path.GetExtension(filePath).Equals(".iso", StringComparison.OrdinalIgnoreCase);
 
         private bool ContainsIsoFile(string directoryPath) => Directory.Exists(directoryPath) && Directory.GetFiles(directoryPath, "*.iso", SearchOption.TopDirectoryOnly).Any();
-
-        private bool IsMediaFile(string extension)
-        {
-            string[] mediaExtensions = { ".avi", ".mov", ".mkv", ".wmv", ".flac", ".iso", ".mp3", ".mp4" };
-            return mediaExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase);
-        }
 
         private static string GetPotPlayerPath()
         {

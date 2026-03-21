@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using Microsoft.WindowsAPICodePack.Dialogs;
 using LibVideo.ViewModels;
+using LibVideo.Helpers;
 
 namespace LibVideo
 {
@@ -20,9 +21,9 @@ namespace LibVideo
         private void LoadCurrentLanguage()
         {
             string lang = "zh";
-            if (File.Exists("language.txt"))
+            if (File.Exists(AppPaths.LanguageFile))
             {
-                lang = File.ReadAllText("language.txt").Trim();
+                lang = File.ReadAllText(AppPaths.LanguageFile).Trim();
             }
 
             foreach (ComboBoxItem item in LanguageComboBox.Items)
@@ -43,7 +44,7 @@ namespace LibVideo
             {
                 string langCode = item.Tag.ToString();
                 App.ChangeLanguage(langCode);
-                File.WriteAllText("language.txt", langCode);
+                File.WriteAllText(AppPaths.LanguageFile, langCode);
             }
         }
 
