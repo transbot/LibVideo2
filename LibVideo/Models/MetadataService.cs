@@ -30,12 +30,7 @@ namespace LibVideo.Models
 
         private static bool IsEnglish()
         {
-            if (File.Exists(AppPaths.LanguageFile))
-            {
-                string lang = File.ReadAllText(AppPaths.LanguageFile).Trim();
-                if (lang == "en") return true;
-            }
-            return false;
+            return App.CurrentLanguageCode == "en";
         }
 
         public static async Task<VideoMetadata> GetMetadataAsync(string videoFilePath)
@@ -70,7 +65,10 @@ namespace LibVideo.Models
                     }
                     if (hasAudio && !hasVideo) isAudio = true;
                 } 
-                catch { }
+                catch (Exception ex)
+                {
+                    Logger.Error(ex, $"Failed to analyze directory {videoFilePath}");
+                }
             }
             else
             {
@@ -239,7 +237,10 @@ namespace LibVideo.Models
 
                 return meta;
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, $"TMDB search failed for {category}: {query}");
+            }
             return null;
         }
 
@@ -298,8 +299,9 @@ namespace LibVideo.Models
                     var genres = xdoc.Descendants("genre").Select(x => x.Value).ToList();
                     meta.Genre = genres.Any() ? string.Join(", ", genres) : (isEn ? "Video" : "视频");
                 }
-                catch
+                catch (Exception ex)
                 {
+                    Logger.Error(ex, $"Error reading NFO for {nfoPath}");
                     meta.Title = baseName;
                     meta.Plot = isEn ? "Error reading NFO." : "读取 NFO 出错。";
                     meta.Genre = isEn ? "Video" : "视频";

@@ -32,11 +32,14 @@
     <system:String x:Key="LoadingText">Loading files, please wait...</system:String>
 
     <!-- Dialog Strings -->
-    <system:String x:Key="DialogRefreshCacheMsg">Are you sure you want to clear all metadata cache and resync?&#x0a;(Your configured directories will be preserved)</system:String>
+    <system:String x:Key="DialogRefreshCacheMsg">This operation will clear all cached metadata (posters, plots, etc.) and rescan the directories in the background (which may take a while to query the TMDB API). Are you sure you want to clear and refresh the cache?</system:String>
+    <system:String x:Key="SettingsHintText">Please click here to configure your video directories first!</system:String>
     <system:String x:Key="DialogRefreshCacheTitle">Clear Metadata Cache</system:String>
-    <system:String x:Key="DialogNoIsoFound">No ISO file found in the specified directory.</system:String>
+    <system:String x:Key="DialogNoIsoFound">No ISO file found in this directory.</system:String>
+    <system:String x:Key="DialogSelectFolderTitle">Select Folder</system:String>
+    <system:String x:Key="DialogSelectPlayerTitle">Select Custom Player</system:String>
     <system:String x:Key="DialogErrorTitle">Error</system:String>
-    <system:String x:Key="DialogPathInvalid">The file path does not exist or is not valid.</system:String>
+    <system:String x:Key="DialogPathInvalid">Path is invalid or not ready.</system:String>
 
     <!-- StatusBar Strings -->
     <system:String x:Key="StatusTotalItems">Total media items/folders: {0}</system:String>

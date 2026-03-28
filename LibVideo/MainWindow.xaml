@@ -53,14 +53,42 @@
             </StackPanel>
 
             <StackPanel Orientation="Horizontal" Grid.Column="1" VerticalAlignment="Center">
-                <Button x:Name="btnAbout" Style="{StaticResource MaterialDesignFloatingActionMiniButton}" Click="btnAbout_Click" Height="40" Width="40" ToolTip="{DynamicResource AboutToolTip}" Margin="0,0,10,0" Background="{DynamicResource PrimaryHueMidBrush}" BorderBrush="Transparent">
-                    <materialDesign:PackIcon Kind="InformationOutline" Height="24" Width="24" Foreground="White" />
+                <Button x:Name="btnToggleLang" Style="{StaticResource MaterialDesignFloatingActionMiniButton}" Click="btnToggleLang_Click" Height="40" Width="40" ToolTip="切换语言 / Toggle Language" Margin="0,0,10,0" Background="{DynamicResource PrimaryHueLightBrush}" BorderBrush="Transparent">
+                    <materialDesign:PackIcon Kind="Translate" Height="24" Width="24" Foreground="White" />
+                </Button>
+                <Button x:Name="btnSettings" Click="btnSettings_Click" Height="40" Width="40" Margin="0,0,10,0">
+                    <Button.RenderTransform>
+                        <TranslateTransform Y="0" />
+                    </Button.RenderTransform>
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource MaterialDesignFloatingActionMiniButton}">
+                            <Setter Property="ToolTip" Value="{DynamicResource SettingsToolTip}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsHintVisible}" Value="True">
+                                    <Setter Property="ToolTip" Value="{DynamicResource SettingsHintText}" />
+                                    <Setter Property="Background" Value="#E53935" />
+                                    <Setter Property="BorderBrush" Value="#E53935" />
+                                    <DataTrigger.EnterActions>
+                                        <BeginStoryboard x:Name="HopStoryboard">
+                                            <Storyboard RepeatBehavior="Forever">
+                                                <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" From="0" To="-6" Duration="0:0:0.35" AutoReverse="True" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.EnterActions>
+                                    <DataTrigger.ExitActions>
+                                        <StopStoryboard BeginStoryboardName="HopStoryboard"/>
+                                    </DataTrigger.ExitActions>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                    <materialDesign:PackIcon Kind="Settings" Height="24" Width="24" />
                 </Button>
                 <Button Style="{StaticResource MaterialDesignFloatingActionMiniButton}" Command="{Binding RefreshCacheCommand}" Height="40" Width="40" ToolTip="{DynamicResource RefreshCacheToolTip}" Margin="0,0,10,0" Background="{DynamicResource PrimaryHueDarkBrush}" BorderBrush="Transparent">
                     <materialDesign:PackIcon Kind="DatabaseRefresh" Height="24" Width="24" Foreground="White" />
                 </Button>
-                <Button x:Name="btnSettings" Style="{StaticResource MaterialDesignFloatingActionMiniButton}" Click="btnSettings_Click" Height="40" Width="40" ToolTip="{DynamicResource SettingsToolTip}">
-                    <materialDesign:PackIcon Kind="Settings" Height="24" Width="24" />
+                <Button x:Name="btnAbout" Style="{StaticResource MaterialDesignFloatingActionMiniButton}" Click="btnAbout_Click" Height="40" Width="40" ToolTip="{DynamicResource AboutToolTip}" Margin="0" Background="{DynamicResource PrimaryHueMidBrush}" BorderBrush="Transparent">
+                    <materialDesign:PackIcon Kind="InformationOutline" Height="24" Width="24" Foreground="White" />
                 </Button>
             </StackPanel>
         </Grid>
@@ -156,21 +184,42 @@
                 </Border>
 
                 <!-- 3. Crisp Foreground Content -->
-                <Grid Margin="16">
+                <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="115" />
+                        <ColumnDefinition Width="135" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     
-                    <Border Grid.Column="0" CornerRadius="4" ClipToBounds="True">
-                        <Image Source="{Binding CurrentMetadata.PosterPath}" Stretch="UniformToFill" />
+                    <Border Grid.Column="0" Cursor="Hand" Background="Transparent">
+                        <Border.InputBindings>
+                            <MouseBinding MouseAction="LeftClick" Command="{Binding OpenCoverImageCommand}" />
+                        </Border.InputBindings>
+                        <Image Source="{Binding CurrentMetadata.PosterPath}" Stretch="Uniform" />
                     </Border>
                     
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="20,0,10,0">
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="20,16,16,16">
                         <TextBlock Text="{Binding CurrentMetadata.Title}" FontSize="26" FontWeight="Bold" Foreground="White" Margin="0,0,0,6" TextWrapping="Wrap" />
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                            <TextBlock Text="{Binding CurrentMetadata.Genre}" FontSize="13" Foreground="#B3FFFFFF" />
-                            <TextBlock Text="{Binding CurrentMetadata.RatingDisplay}" FontSize="13" Foreground="#FFD700" Margin="12,0,0,0" />
+                            <TextBlock Text="{Binding CurrentMetadata.Genre}" FontSize="13" Foreground="#B3FFFFFF" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding CurrentMetadata.RatingDisplay}" FontSize="13" Foreground="#FFD700" Margin="12,0,0,0" VerticalAlignment="Center" />
+                            <Button Style="{StaticResource MaterialDesignIconButton}" 
+                                    Command="{Binding OpenMediaCommand}" 
+                                    CommandParameter="{Binding SelectedVideo}" 
+                                    Width="30" Height="30" Padding="0" Margin="20,0,5,0"
+                                    Foreground="{DynamicResource PrimaryHueMidBrush}"
+                                    ToolTip="{DynamicResource PlayVideoToolTip}"
+                                    VerticalAlignment="Center">
+                                <materialDesign:PackIcon Kind="Play" Width="20" Height="20" />
+                            </Button>
+                            <Button Style="{StaticResource MaterialDesignIconButton}" 
+                                    Command="{Binding OpenContainingFolderCommand}" 
+                                    CommandParameter="{Binding SelectedVideo}" 
+                                    Width="30" Height="30" Padding="0" Margin="0"
+                                    Foreground="{DynamicResource SecondaryHueMidBrush}"
+                                    ToolTip="{DynamicResource OpenFolderToolTip}"
+                                    VerticalAlignment="Center">
+                                <materialDesign:PackIcon Kind="FolderOpen" Width="20" Height="20" />
+                            </Button>
                         </StackPanel>
                         <TextBlock Text="{Binding CurrentMetadata.Plot}" FontSize="14" Foreground="#E6FFFFFF" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="85" LineHeight="20" />
                     </StackPanel>
@@ -194,6 +243,19 @@
                 <ProgressBar Style="{StaticResource MaterialDesignCircularProgressBar}" Value="0" IsIndeterminate="True" Width="50" Height="50" Margin="0,0,0,16" Foreground="White" />
                 <TextBlock Text="{DynamicResource LoadingText}" Foreground="White" FontSize="20"/>
             </StackPanel>
+        </Grid>
+        
+        <!-- Image Popup Overlay -->
+        <Grid Grid.RowSpan="4" Panel.ZIndex="90" Background="#E6000000" Visibility="{Binding IsImagePopupVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <Grid.InputBindings>
+                <MouseBinding MouseAction="LeftClick" Command="{Binding CloseCoverImageCommand}" />
+            </Grid.InputBindings>
+            
+            <Image Source="{Binding CurrentMetadata.PosterPath}" Stretch="Uniform" Margin="40" />
+            
+            <Button Command="{Binding SaveCoverImageCommand}" Style="{StaticResource MaterialDesignFloatingActionLightButton}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="40" ToolTip="下载并保存图片">
+                <materialDesign:PackIcon Kind="Download" Width="24" Height="24" />
+            </Button>
         </Grid>
     </Grid>
 </Window>

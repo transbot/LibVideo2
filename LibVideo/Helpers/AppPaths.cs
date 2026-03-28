@@ -24,6 +24,7 @@ namespace LibVideo.Helpers
         public static string PlayerFile => Path.Combine(_baseDir, "player.txt");
         public static string SearchHistoryFile => Path.Combine(_baseDir, "search_history.txt");
         public static string DatabaseFile => Path.Combine(_baseDir, "libvideo_db.db");
+        public static string LogFile => Path.Combine(_baseDir, "crash.log");
 
         /// <summary>
         /// One-time migration: copies config files from the exe directory to %AppData%\LibVideo\

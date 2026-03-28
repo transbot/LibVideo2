@@ -45,18 +45,25 @@ namespace LibVideo
                 LogException(args.Exception);
         }
 
+        protected override void OnExit(ExitEventArgs e)
+        {
+            if (MainWindow?.DataContext is IDisposable disposableVm)
+            {
+                disposableVm.Dispose();
+            }
+            base.OnExit(e);
+        }
+
         private void LogException(Exception ex)
         {
-            if (ex == null) return;
-            try
-            {
-                File.AppendAllText("crash.log", $"[{DateTime.Now}] {ex.ToString()}\n\n");
-            }
-            catch { }
+            Logger.Error(ex, "Unhandled Exception");
         }
+
+        public static string CurrentLanguageCode { get; private set; } = "zh";
 
         public static void ChangeLanguage(string langCode)
         {
+            CurrentLanguageCode = langCode;
             var dictionary = new ResourceDictionary();
             if (langCode == "en")
             {

@@ -32,11 +32,14 @@
     <system:String x:Key="LoadingText">正在加载文件，请稍候...</system:String>
 
     <!-- Dialog Strings -->
-    <system:String x:Key="DialogRefreshCacheMsg">确定要清空所有已脱机保存的海报与文本缓存，并重新全盘同步吗？&#x0a;（您添加的目录将会被完好保留）</system:String>
+    <system:String x:Key="DialogRefreshCacheMsg">此操作将清空当前读取的所有海报、影片简介等缓存元数据，并在后台重新扫描和匹配（可能会需要较长的时间来请求TMDB接口）。您确定要清空并刷新缓存吗？</system:String>
+    <system:String x:Key="SettingsHintText">请先点击此处配置您的影音目录！</system:String>
     <system:String x:Key="DialogRefreshCacheTitle">清空元数据缓存</system:String>
-    <system:String x:Key="DialogNoIsoFound">您指定的目录中未找到ISO文件。</system:String>
+    <system:String x:Key="DialogNoIsoFound">在该目录下未发现 ISO 文件。</system:String>
     <system:String x:Key="DialogErrorTitle">错误</system:String>
-    <system:String x:Key="DialogPathInvalid">指定的文件或目录不存在或无效。</system:String>
+    <system:String x:Key="DialogPathInvalid">路径无效或尚未准备好。</system:String>
+    <system:String x:Key="DialogSelectFolderTitle">选择文件夹</system:String>
+    <system:String x:Key="DialogSelectPlayerTitle">选择自定义播放器</system:String>
 
     <!-- StatusBar Strings -->
     <system:String x:Key="StatusTotalItems">媒体文件或文件夹共计: {0} 个</system:String>

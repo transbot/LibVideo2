@@ -1,7 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -11,22 +10,33 @@ using CommunityToolkit.Mvvm.Input;
 using LibVideo.Models;
 using LibVideo.Data;
 using LibVideo.Helpers;
-using Microsoft.Win32;
+using LibVideo.Services;
 using System.Windows.Input;
 
 namespace LibVideo.ViewModels
 {
-    public class MainViewModel : ObservableObject
+    public class MainViewModel : ObservableObject, IDisposable
     {
         private readonly DatabaseManager _dbManager;
-        private readonly string potplayerPath = GetPotPlayerPath();
+        private readonly PlayerService _playerService;
+        private readonly SearchHistoryService _searchHistoryService;
+        private readonly FileScanService _fileScanService;
+        private readonly Debouncer _searchDebouncer;
+        private readonly Debouncer _fileChangeDebouncer;
 
         public MainViewModel()
         {
             _dbManager = new DatabaseManager();
+            _playerService = new PlayerService(File.Exists(AppPaths.PlayerFile) ? File.ReadAllText(AppPaths.PlayerFile) : null);
+            _searchHistoryService = new SearchHistoryService();
+            _fileScanService = new FileScanService();
+            
+            _searchDebouncer = new Debouncer(TimeSpan.FromMilliseconds(300));
+            _fileChangeDebouncer = new Debouncer(TimeSpan.FromSeconds(1));
+
             Directories = new ObservableCollection<string>();
             VideoItems = new ObservableCollection<VideoItem>();
-            SearchHistory = new ObservableCollection<string>();
+            SearchHistory = _searchHistoryService.History;
             
             AddDirectoryCommand = new AsyncRelayCommand<string>(AddDirectory);
             DeleteSelectedDirectoryCommand = new AsyncRelayCommand(DeleteSelectedDirectory);
@@ -37,12 +47,23 @@ namespace LibVideo.ViewModels
             OpenContainingFolderCommand = new RelayCommand<VideoItem>(OpenContainingFolder);
             SelectPlayerCommand = new RelayCommand(SelectPlayer);
             RefreshCacheCommand = new AsyncRelayCommand(RefreshCacheAsync);
+            OpenCoverImageCommand = new RelayCommand(() => IsImagePopupVisible = true);
+            CloseCoverImageCommand = new RelayCommand(() => IsImagePopupVisible = false);
+            SaveCoverImageCommand = new AsyncRelayCommand(SaveCoverImageAsync);
+
+            _fileScanService.FilesChanged += (s, e) => 
+            {
+                Application.Current.Dispatcher.Invoke(() => 
+                {
+                    _fileChangeDebouncer.Debounce(async () => await RefreshFromDiskAsync());
+                });
+            };
+
+            Directories.CollectionChanged += (s, e) => OnPropertyChanged(nameof(IsHintVisible));
 
             LoadDirectories();
-            LoadSearchHistory();
-            SetupWatchers();
-            if (File.Exists(AppPaths.PlayerFile)) customPlayerPath = File.ReadAllText(AppPaths.PlayerFile);
-            _ = InitializeDataAsync();
+            _fileScanService.SetupWatchers(Directories);
+            InitializeDataAsync().SafeFireAndForget();
         }
 
         private bool isLoading;
@@ -65,7 +86,6 @@ namespace LibVideo.ViewModels
                     
                     if (isDeleting)
                     {
-                        // 用户主动执行了清除/退格，立即丢弃所有的记录准备（不要缓存残缺片段）
                         maxTypedKeyword = "";
                     }
                     else if (!string.IsNullOrEmpty(value))
@@ -77,11 +97,12 @@ namespace LibVideo.ViewModels
                     }
                     else if (string.IsNullOrEmpty(value) && !string.IsNullOrWhiteSpace(maxTypedKeyword))
                     {
-                        // 点击X按钮（值变空且不是通过退格/Delete发生）
                         CommitSearchText(maxTypedKeyword);
                         maxTypedKeyword = "";
                     }
-                    FilterItems();
+                    
+                    // Task 8 & 5: Debounce filtering for better performance
+                    _searchDebouncer.Debounce(() => FilterItems());
                 }
             }
         }
@@ -107,16 +128,13 @@ namespace LibVideo.ViewModels
             set => SetProperty(ref selectedDirectory, value);
         }
 
-        private string customPlayerPath;
         public string CustomPlayerPath
         {
-            get => customPlayerPath;
+            get => _playerService.CustomPlayerPath;
             set 
             {
-                if (SetProperty(ref customPlayerPath, value))
-                {
-                    File.WriteAllText(AppPaths.PlayerFile, value ?? "");
-                }
+                _playerService.CustomPlayerPath = value;
+                OnPropertyChanged(nameof(CustomPlayerPath));
             }
         }
 
@@ -132,6 +150,15 @@ namespace LibVideo.ViewModels
         }
         public bool IsMetadataVisible => CurrentMetadata != null;
 
+        private bool _isImagePopupVisible;
+        public bool IsImagePopupVisible
+        {
+            get => _isImagePopupVisible;
+            set => SetProperty(ref _isImagePopupVisible, value);
+        }
+
+        public bool IsHintVisible => Directories.Count == 0;
+
         private VideoItem selectedVideo;
         public VideoItem SelectedVideo
         {
@@ -140,8 +167,9 @@ namespace LibVideo.ViewModels
             {
                 if (SetProperty(ref selectedVideo, value))
                 {
+                    IsImagePopupVisible = false;
                     if (value != null)
-                        _ = LoadMetadataAsync(value.FullName);
+                        LoadMetadataAsync(value.FullName).SafeFireAndForget();
                     else
                         CurrentMetadata = null;
                 }
@@ -188,11 +216,13 @@ namespace LibVideo.ViewModels
                     }
                     item.HasScraped = true;
                     
-                    // Fire-and-forget DB update in background thread
-                    _ = Task.Run(() => _dbManager.UpdateItemMetadata(item));
+                    Task.Run(() => _dbManager.UpdateItemMetadata(item)).SafeFireAndForget();
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, $"Failed to load metadata for {path}");
+            }
         }
 
         public ObservableCollection<string> Directories { get; }
@@ -208,85 +238,32 @@ namespace LibVideo.ViewModels
         public IRelayCommand<VideoItem> OpenContainingFolderCommand { get; }
         public IRelayCommand SelectPlayerCommand { get; }
         public IAsyncRelayCommand RefreshCacheCommand { get; }
+        public IRelayCommand OpenCoverImageCommand { get; }
+        public IRelayCommand CloseCoverImageCommand { get; }
+        public IAsyncRelayCommand SaveCoverImageCommand { get; }
 
         private List<VideoItem> _allDatabaseItems = new List<VideoItem>();
-        private List<FileSystemWatcher> _watchers = new List<FileSystemWatcher>();
-        private System.Windows.Threading.DispatcherTimer _debounceTimer;
-
-        private void SetupWatchers()
-        {
-            foreach (var w in _watchers)
-            {
-                w.EnableRaisingEvents = false;
-                w.Dispose();
-            }
-            _watchers.Clear();
-
-            foreach (var dir in Directories)
-            {
-                if (Directory.Exists(dir))
-                {
-                    var watcher = new FileSystemWatcher(dir);
-                    watcher.IncludeSubdirectories = false;
-                    watcher.Created += Watcher_Changed;
-                    watcher.Deleted += Watcher_Changed;
-                    watcher.Renamed += Watcher_Changed;
-                    watcher.EnableRaisingEvents = true;
-                    _watchers.Add(watcher);
-                }
-            }
-        }
-
-        private void Watcher_Changed(object sender, FileSystemEventArgs e)
-        {
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                if (_debounceTimer == null)
-                {
-                    _debounceTimer = new System.Windows.Threading.DispatcherTimer();
-                    _debounceTimer.Interval = TimeSpan.FromSeconds(1);
-                    _debounceTimer.Tick += async (s, args) =>
-                    {
-                        _debounceTimer.Stop();
-                        await RefreshFromDiskAsync();
-                    };
-                }
-                _debounceTimer.Stop();
-                _debounceTimer.Start();
-            });
-        }
-        private int searchHistoryIndex = -1;
 
         private void LoadDirectories()
         {
             if (File.Exists(AppPaths.DirectoriesFile))
             {
-                var dirs = File.ReadAllLines(AppPaths.DirectoriesFile);
-                foreach (var d in dirs) Directories.Add(d);
+                try
+                {
+                    var dirs = File.ReadAllLines(AppPaths.DirectoriesFile);
+                    foreach (var d in dirs) Directories.Add(d);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error(ex, "Failed to load directories.");
+                }
             }
         }
 
         private void SaveDirectories()
         {
-            File.WriteAllLines(AppPaths.DirectoriesFile, Directories);
-        }
-
-        private void LoadSearchHistory()
-        {
-            if (File.Exists(AppPaths.SearchHistoryFile))
-            {
-                var lines = File.ReadAllLines(AppPaths.SearchHistoryFile);
-                foreach (var line in lines)
-                {
-                    if (!string.IsNullOrWhiteSpace(line))
-                        SearchHistory.Add(line);
-                }
-            }
-        }
-
-        private void SaveSearchHistory()
-        {
-            try { File.WriteAllLines(AppPaths.SearchHistoryFile, SearchHistory); } catch { }
+            try { File.WriteAllLines(AppPaths.DirectoriesFile, Directories); }
+            catch (Exception ex) { Logger.Error(ex, "Failed to save directories."); }
         }
 
         private async Task AddDirectory(string path)
@@ -295,7 +272,7 @@ namespace LibVideo.ViewModels
             {
                 Directories.Add(path);
                 SaveDirectories();
-                SetupWatchers();
+                _fileScanService.SetupWatchers(Directories);
                 await RefreshFromDiskAsync();
             }
         }
@@ -307,7 +284,7 @@ namespace LibVideo.ViewModels
                 _dbManager.RemoveDirectoryItems(SelectedDirectory);
                 Directories.Remove(SelectedDirectory);
                 SaveDirectories();
-                SetupWatchers();
+                _fileScanService.SetupWatchers(Directories);
                 await LoadFromDatabaseAsync();
             }
         }
@@ -330,7 +307,7 @@ namespace LibVideo.ViewModels
         private async Task InitializeDataAsync()
         {
             await LoadFromDatabaseAsync();
-            _ = RefreshFromDiskAsync();
+            RefreshFromDiskAsync().SafeFireAndForget();
         }
 
         private async Task LoadFromDatabaseAsync()
@@ -373,10 +350,21 @@ namespace LibVideo.ViewModels
                             {
                                 currentFilesList.Add(new VideoItem { FileName = sdi.Name, FolderName = sdi.Parent.FullName, FullName = sdi.FullName });
                             }
-                        } catch { }
+                        } 
+                        catch (Exception ex)
+                        {
+                            Logger.Error(ex, $"Directory enumeration failed for {dir}");
+                        }
                     }
                 }
-                _dbManager.SyncDiskItems(currentFilesList, scannedRoots);
+                try
+                {
+                    _dbManager.SyncDiskItems(currentFilesList, scannedRoots);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error(ex, "Failed to sync disk items to DB");
+                }
             });
             
             await LoadFromDatabaseAsync();
@@ -406,26 +394,7 @@ namespace LibVideo.ViewModels
         
         private void CommitSearchText(string text)
         {
-            text = text?.Trim() ?? "";
-            if (!string.IsNullOrEmpty(text))
-            {
-                // 深度清除所有的重复项（极其严谨地预防任何冗余残留）
-                var existingItems = SearchHistory.Where(s => s.Equals(text, StringComparison.OrdinalIgnoreCase)).ToList();
-                foreach (var item in existingItems)
-                {
-                    SearchHistory.Remove(item);
-                }
-                
-                // 置顶最新搜索结果
-                SearchHistory.Insert(0, text);
-                
-                if (SearchHistory.Count > 10)
-                {
-                    SearchHistory.RemoveAt(SearchHistory.Count - 1);
-                }
-                searchHistoryIndex = -1; // -1表示未在历史记录中选中任何一项
-                SaveSearchHistory();
-            }
+            _searchHistoryService.CommitSearchText(text);
         }
 
         private void CommitSearch()
@@ -437,31 +406,19 @@ namespace LibVideo.ViewModels
 
         private void PrevSearch()
         {
-            if (SearchHistory.Count > 0)
+            var prev = _searchHistoryService.GetPrevious();
+            if (prev != null)
             {
-                if (searchHistoryIndex < SearchHistory.Count - 1)
-                {
-                    searchHistoryIndex++;
-                    // 为了防止触发setter中的重置逻辑，先临时关闭历史记录指针或直接赋予
-                    SearchKeyword = SearchHistory[searchHistoryIndex];
-                }
+                SearchKeyword = prev;
             }
         }
 
         private void NextSearch()
         {
-            if (SearchHistory.Count > 0)
+            var next = _searchHistoryService.GetNext();
+            if (next != null)
             {
-                if (searchHistoryIndex > 0)
-                {
-                    searchHistoryIndex--;
-                    SearchKeyword = SearchHistory[searchHistoryIndex];
-                }
-                else if (searchHistoryIndex == 0)
-                {
-                    searchHistoryIndex = -1;
-                    SearchKeyword = "";
-                }
+                SearchKeyword = next;
             }
         }
 
@@ -473,85 +430,95 @@ namespace LibVideo.ViewModels
 
         private void SelectPlayer()
         {
-            var dlg = new OpenFileDialog { Filter = "Executable Files (*.exe)|*.exe", Title = "选择自定义播放器" };
-            if (dlg.ShowDialog() == true)
-            {
-                CustomPlayerPath = dlg.FileName;
-            }
+            _playerService.SelectPlayer(path => OnPropertyChanged(nameof(CustomPlayerPath)));
         }
 
         private void OpenMedia(VideoItem item)
         {
             if (item == null) return;
-            string filePath = item.FullName;
-            string executable = !string.IsNullOrEmpty(CustomPlayerPath) && File.Exists(CustomPlayerPath) ? CustomPlayerPath : potplayerPath;
-            
-            if (IsIsoFile(filePath) || ContainsIsoFile(filePath))
+            try
             {
-                string isoFilePath = filePath;
-                if (Directory.Exists(filePath))
-                {
-                    isoFilePath = Directory.GetFiles(filePath, "*.iso", SearchOption.TopDirectoryOnly).FirstOrDefault();
-                }
-
-                if (!string.IsNullOrEmpty(isoFilePath))
-                {
-                    if (executable != null)
-                        Process.Start(executable, $"\"{isoFilePath}\"");
-                    else
-                        Process.Start(new ProcessStartInfo(isoFilePath) { UseShellExecute = true });
-                }
-                else
-                {
-                    string msg = Application.Current.TryFindResource("DialogNoIsoFound") as string ?? "No ISO file found in directory.";
-                    string title = Application.Current.TryFindResource("DialogErrorTitle") as string ?? "Error";
-                    MessageBox.Show(msg, title, MessageBoxButton.OK, MessageBoxImage.Error);
-                }
+                _playerService.OpenMedia(item.FullName);
             }
-            else if (File.Exists(filePath) || Directory.Exists(filePath))
+            catch (Exception ex)
             {
-                if (executable != null && !IsIsoFile(filePath))
-                    Process.Start(executable, $"\"{filePath}\"");
-                else
-                    Process.Start(new ProcessStartInfo(filePath) { UseShellExecute = true });
-            }
-            else
-            {
-                string msg = Application.Current.TryFindResource("DialogPathInvalid") as string ?? "Path invalid.";
-                string title = Application.Current.TryFindResource("DialogErrorTitle") as string ?? "Error";
-                MessageBox.Show(msg, title, MessageBoxButton.OK, MessageBoxImage.Error);
+                HandlePlayerError(ex);
             }
         }
 
         private void OpenContainingFolder(VideoItem item)
         {
             if (item == null) return;
-            string filePath = item.FullName;
-
-            if (File.Exists(filePath))
-                Process.Start("explorer.exe", $"/select,\"{filePath}\"");
-            else if (Directory.Exists(filePath))
-                Process.Start("explorer.exe", $"\"{filePath}\"");
-            else
+            try
             {
-                string msg = Application.Current.TryFindResource("DialogPathInvalid") as string ?? "Path invalid.";
-                string title = Application.Current.TryFindResource("DialogErrorTitle") as string ?? "Error";
-                MessageBox.Show(msg, title, MessageBoxButton.OK, MessageBoxImage.Error);
+                _playerService.OpenContainingFolder(item.FullName);
+            }
+            catch (Exception ex)
+            {
+                HandlePlayerError(ex);
             }
         }
 
-        private bool IsIsoFile(string filePath) => Path.GetExtension(filePath).Equals(".iso", StringComparison.OrdinalIgnoreCase);
-
-        private bool ContainsIsoFile(string directoryPath) => Directory.Exists(directoryPath) && Directory.GetFiles(directoryPath, "*.iso", SearchOption.TopDirectoryOnly).Any();
-
-        private static string GetPotPlayerPath()
+        private void HandlePlayerError(Exception ex)
         {
-            RegistryKey registryKey = Registry.ClassesRoot.OpenSubKey(@"Applications\PotPlayerMini64.exe\shell\open\command");
-            string pathName = (string)registryKey?.GetValue(null);
-            if (string.IsNullOrEmpty(pathName)) return null;
+            Logger.Error(ex, "Player or folder open error");
+            string msg = Application.Current.TryFindResource("DialogPathInvalid") as string ?? "Path invalid or operation failed.";
+            if (ex.Message.Contains("ISO"))
+            {
+                msg = Application.Current.TryFindResource("DialogNoIsoFound") as string ?? "No ISO file found in directory.";
+            }
 
-            int index = pathName.LastIndexOf(" ");
-            return index != -1 ? pathName.Substring(0, index).Replace("\"", string.Empty) : null;
+            string title = Application.Current.TryFindResource("DialogErrorTitle") as string ?? "Error";
+            MessageBox.Show(msg, title, MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+
+        private async Task SaveCoverImageAsync()
+        {
+            if (CurrentMetadata == null || string.IsNullOrEmpty(CurrentMetadata.PosterPath))
+                return;
+
+            string posterPath = CurrentMetadata.PosterPath;
+
+            var dlg = new Microsoft.Win32.SaveFileDialog
+            {
+                FileName = Path.GetFileName(posterPath) ?? "poster.jpg",
+                Filter = "Image Files|*.jpg;*.jpeg;*.png;*.bmp",
+                Title = "保存封面图片"
+            };
+
+            if (dlg.ShowDialog() == true)
+            {
+                try
+                {
+                    if (posterPath.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || 
+                        posterPath.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                    {
+                        using (var httpClient = new System.Net.Http.HttpClient())
+                        {
+                            var imageBytes = await httpClient.GetByteArrayAsync(posterPath);
+                            File.WriteAllBytes(dlg.FileName, imageBytes);
+                        }
+                    }
+                    else if (File.Exists(posterPath))
+                    {
+                        File.Copy(posterPath, dlg.FileName, true);
+                    }
+                    MessageBox.Show("图片已成功保存！", "成功", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error(ex, "Failed to save cover image");
+                    MessageBox.Show("图片保存失败: " + ex.Message, "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }
+
+        public void Dispose()
+        {
+            _searchDebouncer?.Cancel();
+            _fileChangeDebouncer?.Cancel();
+            _fileScanService?.Dispose();
+            _dbManager?.Dispose();
         }
     }
 }

@@ -153,6 +153,12 @@
     <Compile Include="Helpers\AppPaths.cs" />
     <Compile Include="Helpers\MediaExtensions.cs" />
     <Compile Include="Helpers\PinyinHelper.cs" />
+    <Compile Include="Helpers\Logger.cs" />
+    <Compile Include="Helpers\TaskExtensions.cs" />
+    <Compile Include="Helpers\Debouncer.cs" />
+    <Compile Include="Services\PlayerService.cs" />
+    <Compile Include="Services\SearchHistoryService.cs" />
+    <Compile Include="Services\FileScanService.cs" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Properties\AssemblyInfo.cs">

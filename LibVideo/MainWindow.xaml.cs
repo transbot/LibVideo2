@@ -63,5 +63,20 @@ namespace LibVideo
             aboutWin.Owner = this;
             aboutWin.ShowDialog();
         }
+
+        private void btnToggleLang_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                string currentLang = App.CurrentLanguageCode ?? "zh";
+                string newLang = (currentLang == "en") ? "zh" : "en";
+                App.ChangeLanguage(newLang);
+                System.IO.File.WriteAllText(Helpers.AppPaths.LanguageFile, newLang);
+            }
+            catch (System.Exception ex)
+            {
+                Helpers.Logger.Error(ex, "Failed to toggle language");
+            }
+        }
     }
 }

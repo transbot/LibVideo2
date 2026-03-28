@@ -43,19 +43,7 @@
             <Button Grid.Column="1" Content="{DynamicResource BrowseButton}" Style="{StaticResource MaterialDesignOutlinedButton}" Command="{Binding SelectPlayerCommand}" VerticalAlignment="Center" />
         </Grid>
         
-        <Separator Grid.Row="6" Margin="0,6,0,16" />
-        
-        <Grid Grid.Row="7" Margin="0,0,0,10">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <TextBlock Text="{DynamicResource UILanguageLabel}" FontSize="16" FontWeight="Bold" Margin="0,0,10,0" VerticalAlignment="Center" />
-            <ComboBox x:Name="LanguageComboBox" Grid.Column="1" SelectionChanged="LanguageComboBox_SelectionChanged" Width="150" HorizontalAlignment="Left" VerticalAlignment="Center">
-                <ComboBoxItem Content="简体中文" Tag="zh" />
-                <ComboBoxItem Content="English" Tag="en" />
-            </ComboBox>
-        </Grid>
+
         
         <Button Grid.Row="8" Content="{DynamicResource OKButton}" Style="{StaticResource MaterialDesignRaisedButton}" Click="OkButton_Click" Width="100" HorizontalAlignment="Right" Margin="0,10,0,0" />
     </Grid>
